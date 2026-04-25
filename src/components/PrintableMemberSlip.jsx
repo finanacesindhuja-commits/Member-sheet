@@ -35,7 +35,9 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
           <div className="border border-black p-1 bg-white shadow-sm">
             <QRCodeSVG value={member.member_no || member.id.toString()} size={50} />
           </div>
-          <span className="text-[9px] font-black mt-1 uppercase text-black tracking-tighter">ID: {member.member_no || member.id}</span>
+          <span className="text-[11px] font-black mt-1 uppercase text-black tracking-tighter bg-gray-100 px-2 py-0.5 rounded-sm">
+            ID: {member.member_no || member.id}
+          </span>
         </div>
       </div>
 
@@ -119,7 +121,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
 
             return (
               <tr key={index} className="h-8">
-                <td className="border-2 border-black px-1 py-1 text-center font-black">
+                <td className="border-2 border-black px-1 py-1 text-center font-black text-sm">
                   {isSchedule ? sch.week_number : index + 1}
                 </td>
                 <td className="border-2 border-black px-2 py-1 font-mono font-bold">
