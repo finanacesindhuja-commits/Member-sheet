@@ -72,7 +72,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-500 uppercase text-[9px]">Member ID</span>
-              <span className="font-black text-base text-red-600">#{member.member_no || member.id}</span>
+              <span className="font-black text-base text-red-600">{member.member_no || member.id}</span>
             </div>
           </div>
 
