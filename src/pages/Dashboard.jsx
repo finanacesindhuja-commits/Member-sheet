@@ -245,7 +245,7 @@ export default function Dashboard() {
       )}
 
       {/* Actual Printable Area - Hidden on screen, visible on print */}
-      {!showPreview && memberToPrint && <PrintableMemberSlip member={memberToPrint} centerName={centerName} schedules={memberSchedules} />}
+      {memberToPrint && <PrintableMemberSlip member={memberToPrint} centerName={centerName} schedules={memberSchedules} />}
     </>
   );
 }

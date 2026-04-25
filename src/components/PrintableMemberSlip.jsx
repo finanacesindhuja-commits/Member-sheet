@@ -15,7 +15,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
     : 'N/A';
 
   return (
-    <div className={`p-8 w-[210mm] min-h-[297mm] mx-auto bg-white text-black font-sans box-border relative ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only hidden'}`}>
+    <div className={`p-6 w-[210mm] h-[296mm] mx-auto bg-white text-black font-sans box-border relative overflow-hidden ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only'}`}>
 
       {/* Header */}
       <div className="flex flex-col items-center pb-2 mb-2 text-center relative min-h-[100px] justify-center">
@@ -24,15 +24,13 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
           <img src={logo} alt="Logo" className="w-24 h-24 object-contain -mt-6" />
         </div>
 
-        {/* Company Branding - Centered */}
-        <div className="flex flex-col items-center pt-2">
-          <h1 className="text-4xl font-black uppercase tracking-tight mb-1 text-black">Sindhuja Finance</h1>
-          <p className="text-[10px] text-gray-600 font-bold uppercase max-w-[500px] leading-relaxed">
-            247, MAYILADUTHURAI MAIN ROAD, E.B.Colony, Senthamangalam, Keelakavathugudi, thiruvarur, Tamil Nadu 610001
-          </p>
-        </div>
+        <h1 className="text-3xl font-black uppercase tracking-widest text-black">Sindhuja Finance </h1>
+        <p className="text-[9px] font-bold text-gray-600 uppercase leading-tight max-w-[600px]">
+          247, MAYILADUTHURAI MAIN ROAD, E.B.Colony, Senthamangalam, Keelakavathugudi, Thiruvarur, Tamil Nadu 610001
+        </p>
 
-        {/* QR Code & ID - Top Right */}
+
+        {/* QR Code - Top Right */}
         <div className="absolute top-0 right-0 flex flex-col items-center">
           <div className="border border-black p-1 bg-white shadow-sm">
             <QRCodeSVG value={member.member_no || member.id.toString()} size={50} />
@@ -41,22 +39,21 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         </div>
       </div>
 
-      {/* Member Details Section */}
-      <div className="border-2 border-black p-4 mb-4">
-        <h2 className="text-xl font-bold text-gray-600 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Member Passbook</h2>
+      {/* Member Info Grid */}
+      <div className="border-2 border-black p-4 mb-4 bg-gray-50/30 rounded-sm -mt-6">
         <div className="flex justify-between items-start gap-8">
           <div className="flex-1 grid grid-cols-3 gap-x-6 gap-y-3 text-[11px]">
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-500 uppercase text-[9px]">Member Name</span>
-              <span className="text-sm font-black uppercase">{member.member_name}</span>
+              <span className="font-black text-base">{member.member_name}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-500 uppercase text-[9px]">Loan Amount</span>
-              <span className="text-sm font-black">₹{member.amount_sanctioned?.toLocaleString()}</span>
+              <span className="font-black text-base">₹{Number(member.amount_sanctioned).toLocaleString()}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-500 uppercase text-[9px]">Center Name</span>
-              <span className="font-bold uppercase">{centerName}</span>
+              <span className="font-bold uppercase text-blue-800">{centerName || 'N/A'}</span>
             </div>
 
             <div className="border-b border-gray-100 pb-1">
@@ -78,18 +75,17 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-500 uppercase text-[9px]">Collection Time</span>
-              <div className="w-24 h-6 border border-black mt-1 rounded-sm bg-gray-50/30"></div>
+              <div className="w-40 h-8 border border-black mt-1 rounded-sm bg-white shadow-sm"></div>
             </div>
-
           </div>
 
           {/* Photo Box & Signature */}
-          <div className="flex flex-col items-center shrink-0 -mt-10">
-            <div className="w-28 h-32 border-2 border-dotted border-black flex items-center justify-center bg-white overflow-hidden">
+          <div className="flex flex-col items-center shrink-0">
+            <div className="w-28 h-32 border-2 border-dotted border-black flex items-center justify-center bg-white overflow-hidden shadow-inner">
               {member.member_photo_url ? (
                 <img src={member.member_photo_url} alt="Member" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-[10px] text-gray-400 font-bold uppercase p-2 text-center leading-tight">Member Photo</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase p-2 text-center leading-tight">Photo</span>
               )}
             </div>
             <div className="mt-2 flex flex-col items-center">
@@ -105,12 +101,12 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
       {/* Collection Table */}
       <table className="w-full border-collapse border-2 border-black text-[11px]">
         <thead>
-          <tr>
-            <th className="border-2 border-black px-1 py-2 text-center w-8 uppercase">No</th>
+          <tr className="bg-gray-50">
+            <th className="border-2 border-black px-1 py-2 text-center w-10 uppercase">No</th>
             <th className="border-2 border-black px-2 py-2 text-left w-24 uppercase">Date</th>
-            <th className="border-2 border-black px-2 py-2 text-right w-20 uppercase">Principal</th>
-            <th className="border-2 border-black px-2 py-2 text-right w-20 uppercase">Interest</th>
-            <th className="border-2 border-black px-2 py-2 text-right w-24 uppercase">Total EMI</th>
+            <th className="border-2 border-black px-2 py-2 text-right w-20 uppercase font-black">Principal</th>
+            <th className="border-2 border-black px-2 py-2 text-right w-20 uppercase font-black">Interest</th>
+            <th className="border-2 border-black px-2 py-2 text-right w-24 uppercase font-black">Total EMI</th>
             <th className="border-2 border-black px-1 py-2 text-center w-20 uppercase">Sign</th>
             <th className="border-2 border-black px-2 py-2 text-center uppercase">Remark</th>
           </tr>
@@ -122,20 +118,20 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             const interest = isSchedule && schedules.length > 0 ? Math.round(sch.amount - principal) : null;
 
             return (
-              <tr key={index} className="h-10">
+              <tr key={index} className="h-8">
                 <td className="border-2 border-black px-1 py-1 text-center font-black">
                   {isSchedule ? sch.week_number : index + 1}
                 </td>
                 <td className="border-2 border-black px-2 py-1 font-mono font-bold">
                   {isSchedule ? new Date(sch.scheduled_date).toLocaleDateString('en-GB') : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-600">
+                <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-500">
                   {principal ? `₹${principal.toLocaleString()}` : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-600">
+                <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-500">
                   {interest ? `₹${interest.toLocaleString()}` : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-black">
+                <td className="border-2 border-black px-2 py-1 text-right font-black text-sm">
                   {isSchedule ? `₹${Number(sch.amount).toLocaleString()}` : ''}
                 </td>
                 <td className="border-2 border-black px-1 py-1"></td>
@@ -167,7 +163,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
                 Company Seal
               </div>
             </div>
-            
+
             <div className="flex flex-col items-end z-10">
               <div className="border-b border-black w-48 mb-1"></div>
               <p className="text-[10px] font-black uppercase tracking-wider">Sindhuja Finance Management</p>
