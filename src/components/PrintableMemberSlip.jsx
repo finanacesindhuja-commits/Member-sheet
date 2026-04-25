@@ -33,7 +33,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
       </div>
 
       {/* Member Info Grid */}
-      <div className="border-2 border-black p-3 mb-2 bg-gray-50/30 rounded-sm">
+      <div className="border-2 border-black p-3 mb-2 bg-gray-50/30 rounded-sm -mt-4">
         <div className="flex justify-between items-start gap-8">
           <div className="flex-1 grid grid-cols-3 gap-x-6 gap-y-3 text-[11px]">
             <div className="border-b border-gray-100 pb-1">
