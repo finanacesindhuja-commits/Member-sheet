@@ -77,17 +77,17 @@ export default function Dashboard() {
     try {
       const { error } = await supabase
         .from('loans')
-        .delete()
+        .update({ status: 'ARCHIVED' })
         .eq('id', loanId);
         
       if (error) throw error;
       
       // Update local state
       setMembers(prev => prev.filter(m => m.id !== loanId));
-      alert('Member loan deleted successfully.');
+      alert('Member loan archived and hidden from dashboard.');
     } catch (err) {
-      console.error('Error deleting member:', err);
-      alert('Failed to delete member.');
+      console.error('Error archiving member:', err);
+      alert('Failed to hide member.');
     }
   };
 
