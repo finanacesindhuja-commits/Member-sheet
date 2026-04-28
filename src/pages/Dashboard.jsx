@@ -51,14 +51,16 @@ export default function Dashboard() {
         .from('loans')
         .select('member_name, id, member_id, amount_sanctioned, credited_at, loan_app_id, member_photo_url, mobile_no, nominee_mobile, center_id, members(member_no)')
         .in('center_id', centerIds)
-        .eq('status', 'DISBURSED');
+        .eq('status', 'DISBURSED')
+        .order('member_name', { ascending: true });
 
       if (memError) throw memError;
 
       const formattedMembers = (membersData || []).map(m => ({
         ...m,
         member_no: m.members?.member_no || null,
-        loan_app_id: m.loan_app_id || null
+        loan_app_id: m.loan_app_id || null,
+        amount_sanctioned: Number(m.amount_sanctioned) || 0
       }));
       
       setMembers(formattedMembers);
@@ -92,10 +94,11 @@ export default function Dashboard() {
   const handlePreview = async (member) => {
     setPreviewLoading(true);
     try {
+      // NOTE: collection_schedules.member_id stores loans.id (not members.id)
       const { data, error } = await supabase
         .from('collection_schedules')
         .select('scheduled_date, amount, week_number, scheduled_day')
-        .eq('member_id', member.member_id)
+        .eq('member_id', member.id)
         .order('scheduled_date', { ascending: true });
         
       if (error) throw error;
@@ -117,6 +120,7 @@ export default function Dashboard() {
   const closePreview = () => {
     setShowPreview(false);
     setMemberToPrint(null);
+    setMemberSchedules([]);
   };
 
   const handleLogout = () => {
@@ -212,30 +216,31 @@ export default function Dashboard() {
 
       {/* Preview Modal - Visible on Screen */}
       {showPreview && memberToPrint && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-5xl flex flex-col max-h-[90vh]">
+        <div className="no-print fixed inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm overflow-y-auto py-6 px-4">
+          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-[900px] flex flex-col">
             
-            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-slate-800/50 rounded-t-3xl sticky top-0 z-10">
-              <h2 className="text-xl font-black text-white uppercase tracking-widest">Document Preview</h2>
-              <div className="flex gap-4">
+            {/* Sticky Header */}
+            <div className="p-5 border-b border-white/10 flex justify-between items-center bg-slate-800/50 rounded-t-3xl sticky top-0 z-10">
+              <h2 className="text-lg font-black text-white uppercase tracking-widest">Document Preview</h2>
+              <div className="flex gap-3">
                 <button 
                   onClick={closePreview}
-                  className="px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10"
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={executePrint}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                 >
-                  <FaPrint size={14} /> Print Now
+                  <FaPrint size={13} /> Print Now
                 </button>
               </div>
             </div>
 
-            <div className="p-8 overflow-y-auto bg-slate-950 flex justify-center custom-scrollbar">
-              {/* Scale down slightly on smaller screens to fit */}
-              <div className="transform origin-top scale-[0.6] sm:scale-75 md:scale-90 lg:scale-100 pb-20">
+            {/* Scrollable slip area — renders at natural A4 width, overflow scrolls */}
+            <div className="overflow-x-auto overflow-y-visible bg-slate-950 p-6 flex justify-center rounded-b-3xl">
+              <div className="origin-top" style={{ zoom: 0.82 }}>
                 <PrintableMemberSlip member={memberToPrint} centerName={centerName} isPreview={true} schedules={memberSchedules} />
               </div>
             </div>

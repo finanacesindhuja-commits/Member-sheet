@@ -5,6 +5,11 @@ body {
   color: #f8fafc;
 }
 
+/* Hide print-only elements on screen */
+.print-only {
+  display: none !important;
+}
+
 @media print {
   @page {
     margin: 0;
@@ -14,9 +19,11 @@ body {
     background-color: white !important;
     color: black !important;
   }
+  /* Hide UI on print */
   .no-print {
     display: none !important;
   }
+  /* Show slip only on print */
   .print-only {
     display: block !important;
   }

@@ -14,8 +14,14 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
     ? (schedules[0].scheduled_day || days[new Date(schedules[0].scheduled_date).getDay()])
     : 'N/A';
 
+  // Pre-calculate principal per instalment (loan amount ÷ number of weeks)
+  const totalWeeks = schedules.length > 0 ? schedules.length : 1;
+  const principalPerWeek = schedules.length > 0
+    ? Math.round(Number(member.amount_sanctioned) / totalWeeks)
+    : 0;
+
   return (
-    <div className={`p-4 w-[210mm] h-[296mm] mx-auto bg-white text-black font-sans box-border relative overflow-hidden ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only'}`}>
+    <div className={`p-4 w-[210mm] mx-auto bg-white text-black font-sans box-border relative ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only h-[296mm] overflow-hidden'}`}>
 
       {/* Header */}
       <div className="flex flex-col items-center pb-2 mb-2 text-center relative">
@@ -111,25 +117,29 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         <tbody>
           {rows.map((sch, index) => {
             const isSchedule = sch && sch.scheduled_date;
-            const principal = isSchedule && schedules.length > 0 ? Math.round(member.amount_sanctioned / schedules.length) : null;
-            const interest = isSchedule && schedules.length > 0 ? Math.round(sch.amount - principal) : null;
+            // EMI total amount from schedule
+            const emiAmount = isSchedule ? Number(sch.amount) : 0;
+            // Principal = loan amount ÷ total weeks (pre-calculated)
+            const principal = isSchedule ? principalPerWeek : null;
+            // Interest = EMI - principal (can be 0 if flat loan)
+            const interest = isSchedule ? Math.max(0, Math.round(emiAmount - principalPerWeek)) : null;
 
             return (
               <tr key={index} className="h-8">
                 <td className="border-2 border-black px-1 py-1 text-center font-black text-sm">
-                  {isSchedule ? sch.week_number : index + 1}
+                  {isSchedule ? (sch.week_number ?? index + 1) : index + 1}
                 </td>
                 <td className="border-2 border-black px-2 py-1 font-mono font-bold">
                   {isSchedule ? new Date(sch.scheduled_date).toLocaleDateString('en-GB') : ''}
                 </td>
                 <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-500">
-                  {principal ? `₹${principal.toLocaleString()}` : ''}
+                  {isSchedule ? `₹${principal.toLocaleString()}` : ''}
                 </td>
                 <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-500">
-                  {interest ? `₹${interest.toLocaleString()}` : ''}
+                  {isSchedule ? (interest > 0 ? `₹${interest.toLocaleString()}` : '—') : ''}
                 </td>
                 <td className="border-2 border-black px-2 py-1 text-right font-black text-sm">
-                  {isSchedule ? `₹${Number(sch.amount).toLocaleString()}` : ''}
+                  {isSchedule ? `₹${emiAmount.toLocaleString()}` : ''}
                 </td>
                 <td className="border-2 border-black px-1 py-1"></td>
                 <td className="border-2 border-black px-2 py-1"></td>
