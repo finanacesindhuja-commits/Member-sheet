@@ -29,11 +29,11 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         <div className="absolute top-0 left-0">
           <img src={logo} alt="Logo" className="w-20 h-20 object-contain" />
         </div>
-        
+
         <div className="pt-2">
           <h1 className="text-3xl font-black uppercase tracking-[0.2em] text-black">Sindhuja Finance</h1>
           <p className="text-[10px] font-bold text-gray-700 uppercase leading-relaxed max-w-[600px] mt-1">
-            247, MAYILADUTHURAI MAIN ROAD, E.B.Colony, Senthamangalam, Keelakavathugudi, Thiruvarur, Tamil Nadu 610001
+            NO-1/23,MAYILADUTHURAI ROAD, SENTHAMANGALAM,THIRUVARUR, 610001
           </p>
         </div>
       </div>
@@ -165,8 +165,8 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         {/* QR Code - Positioned between Instructions and Signature */}
         <div className="flex flex-col items-center shrink-0 mx-2">
           <div className="border-2 border-black p-1 bg-white shadow-sm">
-            <QRCodeSVG 
-              value={`N: ${member.member_name} - I: ${member.member_no || member.id} - A: ${member.amount_sanctioned} - C: ${centerName || 'N/A'}`} 
+            <QRCodeSVG
+              value={`N: ${member.member_name} - I: ${member.member_no || member.id} - A: ${member.amount_sanctioned} - C: ${centerName || 'N/A'}`}
               size={160}
               level="L"
               includeMargin={true}
