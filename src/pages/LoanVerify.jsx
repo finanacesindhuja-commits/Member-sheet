@@ -19,7 +19,7 @@ export default function LoanVerify() {
       // 1. Fetch Loan Basic Info
       const { data: loanData, error: loanError } = await supabase
         .from('loans')
-        .select('id, member_name, status, loan_app_id, member_id')
+        .select('id, member_name, status, loan_app_id, member_id, member_photo_url')
         .or(`id.eq.${loanId},loan_app_id.eq.${loanId}`)
         .maybeSingle();
 
@@ -114,10 +114,19 @@ export default function LoanVerify() {
         {/* Info Table Card */}
         <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
           <div className="p-8 bg-slate-800/50 border-b border-white/10 text-center">
-            <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
-              <FaCheckCircle className="text-blue-400 text-3xl" />
-            </div>
-            <h2 className="text-lg font-black text-white uppercase tracking-widest">Loan Authenticated</h2>
+             <div className="relative inline-block mb-6">
+                <div className="w-24 h-24 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto overflow-hidden border-2 border-blue-500/30 shadow-2xl">
+                   {loan.member_photo_url ? (
+                      <img src={loan.member_photo_url} alt="" className="w-full h-full object-cover" />
+                   ) : (
+                      <FaUser className="text-slate-600 text-3xl" />
+                   )}
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center border-4 border-slate-900 text-white shadow-lg">
+                   <FaCheckCircle size={14} />
+                </div>
+             </div>
+             <h2 className="text-lg font-black text-white uppercase tracking-widest">Loan Authenticated</h2>
           </div>
 
           <div className="p-0">
