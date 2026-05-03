@@ -22,7 +22,7 @@ export default function LoanVerify() {
         .select('id, member_name, status, loan_app_id, member_id')
         .or(`id.eq.${loanId},loan_app_id.eq.${loanId}`)
         .maybeSingle();
-      
+
       if (loanError) {
         console.error('Loan Fetch Error:', loanError);
         setError(`${loanError.message} (${loanError.code})`);
@@ -42,7 +42,7 @@ export default function LoanVerify() {
           .select('member_no')
           .eq('id', loanData.member_id)
           .maybeSingle();
-        
+
         if (!memberError && memberData) {
           memberNo = memberData.member_no;
         }
@@ -95,11 +95,11 @@ export default function LoanVerify() {
   // Determine current week based on date
   const schedules = loan.collection_schedules || [];
   const today = new Date();
-  
+
   // Find the latest week that is either today or in the past
   const pastSchedules = schedules.filter(s => new Date(s.scheduled_date) <= today);
-  const currentWeek = pastSchedules.length > 0 
-    ? Math.max(...pastSchedules.map(s => s.week_number)) 
+  const currentWeek = pastSchedules.length > 0
+    ? Math.max(...pastSchedules.map(s => s.week_number))
     : 1;
 
   return (
@@ -107,17 +107,17 @@ export default function LoanVerify() {
       <div className="w-full max-w-md">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-white uppercase tracking-[0.2em]">Sindhuja Finance</h1>
+          <h1 className="text-3xl font-black text-white uppercase tracking-[0.2em]">Welcome to Sindhuja Finance</h1>
           <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Verification System</p>
         </div>
 
         {/* Info Table Card */}
         <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
           <div className="p-8 bg-slate-800/50 border-b border-white/10 text-center">
-             <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
-                <FaCheckCircle className="text-blue-400 text-3xl" />
-             </div>
-             <h2 className="text-lg font-black text-white uppercase tracking-widest">Loan Authenticated</h2>
+            <div className="w-16 h-16 bg-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+              <FaCheckCircle className="text-blue-400 text-3xl" />
+            </div>
+            <h2 className="text-lg font-black text-white uppercase tracking-widest">Loan Authenticated</h2>
           </div>
 
           <div className="p-0">
