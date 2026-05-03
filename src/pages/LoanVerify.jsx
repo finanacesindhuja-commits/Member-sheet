@@ -16,6 +16,7 @@ export default function LoanVerify() {
   const fetchLoanDetails = async () => {
     try {
       setError(null);
+      // Try matching the ID in the URL against either the internal 'id' or the 'loan_app_id'
       const { data, error: fetchError } = await supabase
         .from('loans')
         .select(`
@@ -24,14 +25,20 @@ export default function LoanVerify() {
           loan_app_id, 
           collection_schedules(week_number, scheduled_date, amount)
         `)
-        .eq('id', loanId)
-        .single();
+        .or(`id.eq.${loanId},loan_app_id.eq.${loanId}`)
+        .maybeSingle();
       
       if (fetchError) {
         console.error('Fetch Error:', fetchError);
         setError(`${fetchError.message} (${fetchError.code})`);
         return;
       }
+
+      if (!data) {
+        setError('Success. No rows returned - This means the ID scanned doesn\'t exist in the database.');
+        return;
+      }
+
       setLoan(data);
     } catch (err) {
       console.error('Error fetching loan details:', err);
