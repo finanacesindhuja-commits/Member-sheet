@@ -16,30 +16,40 @@ export default function LoanVerify() {
   const fetchLoanDetails = async () => {
     try {
       setError(null);
-      // Try matching the ID in the URL against either the internal 'id' or the 'loan_app_id'
-      const { data, error: fetchError } = await supabase
+      // 1. Fetch Loan Basic Info
+      const { data: loanData, error: loanError } = await supabase
         .from('loans')
-        .select(`
-          member_name, 
-          status, 
-          loan_app_id, 
-          collection_schedules(week_number, scheduled_date, amount)
-        `)
+        .select('id, member_name, status, loan_app_id')
         .or(`id.eq.${loanId},loan_app_id.eq.${loanId}`)
         .maybeSingle();
       
-      if (fetchError) {
-        console.error('Fetch Error:', fetchError);
-        setError(`${fetchError.message} (${fetchError.code})`);
+      if (loanError) {
+        console.error('Loan Fetch Error:', loanError);
+        setError(`${loanError.message} (${loanError.code})`);
         return;
       }
 
-      if (!data) {
-        setError('Success. No rows returned - This means the ID scanned doesn\'t exist in the database.');
+      if (!loanData) {
+        setError('No loan record found for this ID/LN Number.');
         return;
       }
 
-      setLoan(data);
+      // 2. Fetch Collection Schedules separately to avoid join errors (PGRST200)
+      const { data: scheduleData, error: schError } = await supabase
+        .from('collection_schedules')
+        .select('week_number, scheduled_date, amount')
+        .eq('member_id', loanData.id)
+        .order('week_number', { ascending: true });
+
+      if (schError) {
+        console.error('Schedule Fetch Error:', schError);
+        // We don't necessarily want to fail the whole page if schedules fail
+      }
+
+      setLoan({
+        ...loanData,
+        collection_schedules: scheduleData || []
+      });
     } catch (err) {
       console.error('Error fetching loan details:', err);
       setError(err.message || 'Unknown error occurred');
