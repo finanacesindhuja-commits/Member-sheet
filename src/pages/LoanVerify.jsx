@@ -19,7 +19,7 @@ export default function LoanVerify() {
       // 1. Fetch Loan Basic Info
       const { data: loanData, error: loanError } = await supabase
         .from('loans')
-        .select('id, member_name, status, loan_app_id')
+        .select('id, member_name, status, loan_app_id, member_id')
         .or(`id.eq.${loanId},loan_app_id.eq.${loanId}`)
         .maybeSingle();
       
@@ -30,11 +30,25 @@ export default function LoanVerify() {
       }
 
       if (!loanData) {
-        setError('No loan record found for this ID/LN Number.');
+        setError('No loan record found for this ID.');
         return;
       }
 
-      // 2. Fetch Collection Schedules separately to avoid join errors (PGRST200)
+      // 2. Fetch Member No from members table
+      let memberNo = 'N/A';
+      if (loanData.member_id) {
+        const { data: memberData, error: memberError } = await supabase
+          .from('members')
+          .select('member_no')
+          .eq('id', loanData.member_id)
+          .maybeSingle();
+        
+        if (!memberError && memberData) {
+          memberNo = memberData.member_no;
+        }
+      }
+
+      // 3. Fetch Collection Schedules separately to avoid join errors (PGRST200)
       const { data: scheduleData, error: schError } = await supabase
         .from('collection_schedules')
         .select('week_number, scheduled_date, amount')
@@ -43,11 +57,11 @@ export default function LoanVerify() {
 
       if (schError) {
         console.error('Schedule Fetch Error:', schError);
-        // We don't necessarily want to fail the whole page if schedules fail
       }
 
       setLoan({
         ...loanData,
+        member_no: memberNo,
         collection_schedules: scheduleData || []
       });
     } catch (err) {
@@ -119,10 +133,10 @@ export default function LoanVerify() {
                 </tr>
                 <tr className="hover:bg-white/[0.02]">
                   <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-3">
-                    <FaHashtag size={12} /> LN Number
+                    <FaHashtag size={12} /> Member No
                   </td>
                   <td className="px-8 py-5 text-sm font-black text-blue-400 font-mono text-right">
-                    {loan.loan_app_id || 'N/A'}
+                    {loan.member_no || 'N/A'}
                   </td>
                 </tr>
                 <tr className="hover:bg-white/[0.02]">
