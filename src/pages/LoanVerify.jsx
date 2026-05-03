@@ -7,6 +7,7 @@ export default function LoanVerify() {
   const { loanId } = useParams();
   const [loan, setLoan] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchLoanDetails();
@@ -14,7 +15,8 @@ export default function LoanVerify() {
 
   const fetchLoanDetails = async () => {
     try {
-      const { data, error } = await supabase
+      setError(null);
+      const { data, error: fetchError } = await supabase
         .from('loans')
         .select(`
           member_name, 
@@ -25,10 +27,15 @@ export default function LoanVerify() {
         .eq('id', loanId)
         .single();
       
-      if (error) throw error;
+      if (fetchError) {
+        console.error('Fetch Error:', fetchError);
+        setError(`${fetchError.message} (${fetchError.code})`);
+        return;
+      }
       setLoan(data);
     } catch (err) {
       console.error('Error fetching loan details:', err);
+      setError(err.message || 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
@@ -42,12 +49,13 @@ export default function LoanVerify() {
     );
   }
 
-  if (!loan) {
+  if (error || !loan) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-center">
         <div className="bg-slate-900 border border-red-500/20 p-8 rounded-3xl max-w-sm">
-          <p className="text-red-400 font-bold">Invalid or Expired QR Code</p>
-          <p className="text-slate-500 text-sm mt-2">The loan information could not be found.</p>
+          <p className="text-red-400 font-bold">Verification Error</p>
+          <p className="text-slate-500 text-sm mt-2">{error || 'Loan information not found.'}</p>
+          <p className="text-slate-600 text-[10px] mt-4 font-mono break-all">ID: {loanId}</p>
         </div>
       </div>
     );
