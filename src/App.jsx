@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import LoanVerify from './pages/LoanVerify';
 
 function App() {
   const PrivateRoute = ({ children }) => {
@@ -19,6 +20,7 @@ function App() {
               <Dashboard />
             </PrivateRoute>
           } />
+          <Route path="/verify/:loanId" element={<LoanVerify />} />
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>
       </div>

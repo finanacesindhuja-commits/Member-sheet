@@ -1,5 +1,6 @@
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import BASE_URL from '../config';
 import logo from '../assets/logo.jpg';
 
 export default function PrintableMemberSlip({ member, centerName, isPreview = false, schedules = [] }) {
@@ -166,7 +167,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         <div className="flex flex-col items-center shrink-0 mx-2">
           <div className="border-2 border-black p-1 bg-white shadow-sm">
             <QRCodeSVG
-              value={`N: ${member.member_name} - I: ${member.member_no || member.id} - A: ${member.amount_sanctioned} - C: ${centerName || 'N/A'}`}
+              value={`${BASE_URL}/verify/${member.id}`}
               size={160}
               level="L"
               includeMargin={true}
