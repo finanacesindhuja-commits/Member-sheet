@@ -149,7 +149,7 @@ export default function LoanVerify() {
                         <FaLock size={8} /> Closed
                       </span>
                     ) : (
-                      <span className="bg-blue-500/10 text-blue-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-500/20 inline-flex items-center gap-2">
+                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20 inline-flex items-center gap-2">
                         <FaCheckCircle size={8} /> Active
                       </span>
                     )}
