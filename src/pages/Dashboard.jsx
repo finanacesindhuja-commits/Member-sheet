@@ -94,11 +94,11 @@ export default function Dashboard() {
   const handlePreview = async (member) => {
     setPreviewLoading(true);
     try {
-      // NOTE: collection_schedules.member_id stores loans.id (not members.id)
+      // Fetch schedules based on the loan ID
       const { data, error } = await supabase
         .from('collection_schedules')
         .select('scheduled_date, amount, week_number, scheduled_day')
-        .eq('member_id', member.id)
+        .eq('loan_id', member.id)
         .order('scheduled_date', { ascending: true });
         
       if (error) throw error;
