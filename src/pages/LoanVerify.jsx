@@ -17,11 +17,40 @@ export default function LoanVerify() {
     try {
       setError(null);
       // 1. Fetch Loan Basic Info
-      const { data: loanData, error: loanError } = await supabase
-        .from('loans')
-        .select('id, member_name, status, loan_app_id, member_id, member_photo_url')
-        .or(`id.eq.${loanId},loan_app_id.eq.${loanId}`)
-        .maybeSingle();
+      let loanData = null;
+      let loanError = null;
+
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(loanId);
+
+      if (isUUID) {
+        // Fallback for older QR codes using UUID
+        const { data, error } = await supabase
+          .from('loans')
+          .select('id, member_name, status, member_id, member_photo_url')
+          .or(`id.eq.${loanId},member_id.eq.${loanId}`)
+          .maybeSingle();
+        loanData = data;
+        loanError = error;
+      } else {
+        // It's a member_no like "LN 0001", find member_id first
+        const { data: memberData, error: memberError } = await supabase
+          .from('members')
+          .select('id')
+          .ilike('member_no', loanId.trim())
+          .maybeSingle();
+          
+        if (memberError) {
+          loanError = memberError;
+        } else if (memberData) {
+          const { data, error } = await supabase
+            .from('loans')
+            .select('id, member_name, status, member_id, member_photo_url')
+            .eq('member_id', memberData.id)
+            .maybeSingle();
+          loanData = data;
+          loanError = error;
+        }
+      }
 
       if (loanError) {
         console.error('Loan Fetch Error:', loanError);

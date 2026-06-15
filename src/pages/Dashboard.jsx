@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPrint, FaSignOutAlt, FaUsers } from 'react-icons/fa';
+import { FaPrint, FaSignOutAlt, FaUsers, FaSearch } from 'react-icons/fa';
 import { supabase } from '../supabaseClient';
 import PrintableMemberSlip from '../components/PrintableMemberSlip';
 
@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [memberSchedules, setMemberSchedules] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const staffId = localStorage.getItem('staffId');
   const staffName = localStorage.getItem('staffName');
@@ -49,7 +50,7 @@ export default function Dashboard() {
       const centerIds = centerList.map(c => c.id);
       const { data: membersData, error: memError } = await supabase
         .from('loans')
-        .select('member_name, id, member_id, amount_sanctioned, credited_at, loan_app_id, member_photo_url, mobile_no, nominee_mobile, center_id, members(member_no)')
+        .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, members(member_no)')
         .in('center_id', centerIds)
         .eq('status', 'DISBURSED')
         .order('member_name', { ascending: true });
@@ -114,6 +115,16 @@ export default function Dashboard() {
   };
 
   const executePrint = () => {
+    if (memberToPrint) {
+      const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
+      if (!printedIds.includes(memberToPrint.id)) {
+        printedIds.push(memberToPrint.id);
+        localStorage.setItem('printed_loans', JSON.stringify(printedIds));
+        setMembers(prev => prev.map(m => 
+          m.id === memberToPrint.id ? { ...m, _printed: true } : m
+        ));
+      }
+    }
     window.print();
   };
 
@@ -131,19 +142,98 @@ export default function Dashboard() {
 
   const centerName = centers.find(c => c.id === memberToPrint?.center_id)?.name || '';
 
+  const renderMemberRow = (member) => {
+    const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
+    const isPrinted = member._printed || printedIds.includes(member.id);
+    const memberDate = member.created_at || member.credited_at;
+    const isNew = !isPrinted && memberDate && new Date(memberDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return (
+      <div key={member.id} className={`p-6 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-white/5 transition-colors gap-4 ${isNew ? 'bg-green-500/5' : ''}`}>
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
+             {member.member_photo_url ? (
+               <img src={member.member_photo_url} alt="" className="w-full h-full object-cover" />
+             ) : <FaUsers className="text-slate-500" size={24} />}
+          </div>
+          <div>
+            <h3 className="font-black text-white text-lg uppercase tracking-tight flex items-center gap-2">
+              {member.member_name}
+              {isNew && (
+                <span className="bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest shadow-lg shadow-green-500/20">
+                  NEW
+                </span>
+              )}
+            </h3>
+            <p className="text-slate-400 text-xs font-mono mt-1 font-bold">ID: {member.member_no || member.id}</p>
+          </div>
+        </div>
+        <div className="flex gap-3 w-full md:w-auto">
+          <button 
+            onClick={() => handlePreview(member)}
+            disabled={previewLoading}
+            className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+          >
+            <FaPrint size={14} /> Preview
+          </button>
+          <button 
+            onClick={() => handleDeleteMember(member.id)}
+            className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95"
+            title="Delete Member"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const getRecentMembers = () => {
+    const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
+    return members.filter(member => {
+      const isPrinted = member._printed || printedIds.includes(member.id);
+      const memberDate = member.created_at || member.credited_at;
+      return !isPrinted && memberDate && new Date(memberDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    }).sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.credited_at ? new Date(a.credited_at).getTime() : 0);
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.credited_at ? new Date(b.credited_at).getTime() : 0);
+      const validA = isNaN(dateA) ? 0 : dateA;
+      const validB = isNaN(dateB) ? 0 : dateB;
+      if (validA === validB) {
+        const noA = parseInt(String(a.member_no || '').replace(/\D/g, '')) || 0;
+        const noB = parseInt(String(b.member_no || '').replace(/\D/g, '')) || 0;
+        return noB - noA;
+      }
+      return validB - validA;
+    });
+  };
+
+  const recentMembers = getRecentMembers();
+
   return (
     <>
       <div className="no-print min-h-screen bg-slate-950 p-4 md:p-8">
         <div className="max-w-5xl mx-auto">
           {/* Header */}
-          <div className="flex justify-between items-center bg-slate-900 border border-white/10 rounded-3xl p-6 mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-white/10 rounded-3xl p-6 mb-8 gap-4">
             <div>
               <h1 className="text-2xl font-black text-white">Welcome, {staffName}</h1>
               <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mt-1">Staff ID: {staffId}</p>
             </div>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors">
-              <FaSignOutAlt size={24} />
-            </button>
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              <div className="relative w-full md:w-64">
+                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search members..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm"
+                />
+              </div>
+              <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors shrink-0">
+                <FaSignOutAlt size={24} />
+              </button>
+            </div>
           </div>
 
 
@@ -153,8 +243,52 @@ export default function Dashboard() {
              <div className="text-center text-white py-10">Loading all members...</div>
           ) : centers.length > 0 ? (
             <div className="space-y-8">
+              
+              {/* Recently Added Section */}
+              {recentMembers.length > 0 && !searchQuery && (
+                <div className="bg-green-900/20 border border-green-500/30 rounded-3xl overflow-hidden shadow-2xl shadow-green-900/10 mb-8">
+                  <div className="p-6 border-b border-green-500/20 bg-green-800/30 flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-green-400 tracking-tight flex items-center gap-2">
+                      <span className="w-2 h-8 bg-green-400 rounded-full"></span>
+                      Recently Added
+                    </h2>
+                    <span className="bg-green-500/20 text-green-300 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-green-500/30">
+                      {recentMembers.length} New
+                    </span>
+                  </div>
+                  <div className="divide-y divide-white/5">
+                    {recentMembers.map(member => renderMemberRow(member))}
+                  </div>
+                </div>
+              )}
+
+              {/* Members List Grouped by Center */}
               {centers.map(center => {
-                const centerMembers = members.filter(m => m.center_id === center.id);
+                const centerMembers = members
+                  .filter(m => m.center_id === center.id)
+                  .filter(m => {
+                    if (!searchQuery) return true;
+                    const q = String(searchQuery).toLowerCase();
+                    return String(m.member_name || '').toLowerCase().includes(q) || 
+                           String(m.member_no || '').toLowerCase().includes(q) || 
+                           String(m.id || '').toLowerCase().includes(q) ||
+                           String(m.mobile_no || '').includes(q);
+                  })
+                  .sort((a, b) => {
+                    const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.credited_at ? new Date(a.credited_at).getTime() : 0);
+                    const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.credited_at ? new Date(b.credited_at).getTime() : 0);
+                    const validA = isNaN(dateA) ? 0 : dateA;
+                    const validB = isNaN(dateB) ? 0 : dateB;
+                    
+                    // If dates are identical or both missing (e.g. bulk import)
+                    if (validA === validB) {
+                      const noA = parseInt(String(a.member_no || '').replace(/\D/g, '')) || 0;
+                      const noB = parseInt(String(b.member_no || '').replace(/\D/g, '')) || 0;
+                      return noB - noA;
+                    }
+                    return validB - validA;
+                  });
+
                 if (centerMembers.length === 0) return null;
 
                 return (
@@ -169,37 +303,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="divide-y divide-white/10">
-                      {centerMembers.map(member => (
-                        <div key={member.id} className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-white/5 transition-colors gap-4">
-                          <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
-                               {member.member_photo_url ? (
-                                 <img src={member.member_photo_url} alt="" className="w-full h-full object-cover" />
-                               ) : <FaUsers className="text-slate-500" size={24} />}
-                            </div>
-                            <div>
-                              <h3 className="font-black text-white text-lg uppercase tracking-tight">{member.member_name}</h3>
-                              <p className="text-slate-400 text-xs font-mono mt-1 font-bold">ID: {member.member_no || member.id}</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-3 w-full md:w-auto">
-                            <button 
-                              onClick={() => handlePreview(member)}
-                              disabled={previewLoading}
-                              className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-blue-500/20"
-                            >
-                              <FaPrint size={14} /> Preview
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteMember(member.id)}
-                              className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95"
-                              title="Delete Member"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                      {centerMembers.map(member => renderMemberRow(member))}
                     </div>
                   </div>
                 );
