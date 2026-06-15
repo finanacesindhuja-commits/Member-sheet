@@ -214,26 +214,32 @@ export default function Dashboard() {
       <div className="no-print min-h-screen bg-slate-950 p-4 md:p-8">
         <div className="max-w-5xl mx-auto">
           {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-white/10 rounded-3xl p-6 mb-8 gap-4">
+          <div className="flex justify-between items-center bg-slate-900 border border-white/10 rounded-3xl p-6 mb-6 shadow-2xl">
             <div>
               <h1 className="text-2xl font-black text-white">Welcome, {staffName}</h1>
               <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mt-1">Staff ID: {staffId}</p>
             </div>
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <div className="relative w-full md:w-64">
-                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search members..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm"
-                />
-              </div>
-              <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors shrink-0">
-                <FaSignOutAlt size={24} />
-              </button>
+            <button 
+              onClick={handleLogout} 
+              className="bg-red-500/10 p-4 rounded-2xl border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-95"
+              title="Logout"
+            >
+              <FaSignOutAlt size={24} />
+            </button>
+          </div>
+
+          {/* Search Bar */}
+          <div className="bg-slate-900 border border-white/10 rounded-3xl p-3 mb-10 flex items-center gap-4 shadow-2xl focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+            <div className="bg-blue-500/10 p-4 rounded-2xl text-blue-400 shrink-0">
+              <FaSearch size={20} />
             </div>
+            <input 
+              type="text" 
+              placeholder="Search members by name, ID, or phone number..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent border-none text-white focus:outline-none text-lg placeholder-slate-500 font-medium tracking-wide pr-4"
+            />
           </div>
 
 
