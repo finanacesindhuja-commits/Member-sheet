@@ -49,25 +49,48 @@ export default function LoanVerify() {
         }
       }
 
-      if (loanError) { setError(`${loanError.message}`); return; }
-      if (!loanData) { setError('No loan record found for this ID.'); return; }
+      if (loanError) {
+        console.error('Loan Fetch Error:', loanError);
+        setError(`${loanError.message} (${loanError.code})`);
+        return;
+      }
+
+      if (!loanData) {
+        setError('No loan record found for this ID.');
+        return;
+      }
 
       let memberNo = 'N/A';
       if (loanData.member_id) {
-        const { data: memberData } = await supabase
-          .from('members').select('member_no').eq('id', loanData.member_id).maybeSingle();
-        if (memberData) memberNo = memberData.member_no;
+        const { data: memberData, error: memberError } = await supabase
+          .from('members')
+          .select('member_no')
+          .eq('id', loanData.member_id)
+          .maybeSingle();
+
+        if (!memberError && memberData) {
+          memberNo = memberData.member_no;
+        }
       }
 
-      const { data: scheduleData } = await supabase
+      const { data: scheduleData, error: schError } = await supabase
         .from('collection_schedules')
         .select('week_number, scheduled_date, amount, penalty')
         .eq('member_id', loanData.id)
         .order('week_number', { ascending: true });
 
-      setLoan({ ...loanData, member_no: memberNo, collection_schedules: scheduleData || [] });
+      if (schError) {
+        console.error('Schedule Fetch Error:', schError);
+      }
+
+      setLoan({
+        ...loanData,
+        member_no: memberNo,
+        collection_schedules: scheduleData || []
+      });
     } catch (err) {
-      setError(err.message || 'Unknown error');
+      console.error('Error fetching loan details:', err);
+      setError(err.message || 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
@@ -75,23 +98,25 @@ export default function LoanVerify() {
 
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={styles.loaderWrap}>
-          <div style={styles.spinner}></div>
-          <p style={styles.loaderText}>Verifying...</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-14 w-14 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Verifying...</p>
         </div>
-        <style>{spinnerCSS}</style>
       </div>
     );
   }
 
   if (error || !loan) {
     return (
-      <div style={styles.page}>
-        <div style={{ ...styles.card, maxWidth: 360, padding: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-          <p style={{ color: '#f87171', fontWeight: 900, fontSize: 16, textTransform: 'uppercase', letterSpacing: 2 }}>Verification Failed</p>
-          <p style={{ color: '#64748b', fontSize: 13, marginTop: 8 }}>{error || 'Record not found.'}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-red-500/20 p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl">
+          <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <FaShieldAlt className="text-red-400" size={28} />
+          </div>
+          <p className="text-red-400 font-black text-lg uppercase tracking-wide">Verification Failed</p>
+          <p className="text-slate-500 text-sm mt-2">{error || 'Loan information not found.'}</p>
+          <p className="text-slate-600 text-[10px] mt-4 font-mono break-all">ID: {loanId}</p>
         </div>
       </div>
     );
@@ -100,7 +125,9 @@ export default function LoanVerify() {
   const schedules = loan.collection_schedules || [];
   const today = new Date();
   const pastSchedules = schedules.filter(s => new Date(s.scheduled_date) <= today);
-  const currentWeek = pastSchedules.length > 0 ? Math.max(...pastSchedules.map(s => s.week_number)) : 1;
+  const currentWeek = pastSchedules.length > 0
+    ? Math.max(...pastSchedules.map(s => s.week_number))
+    : 1;
   const currentWeekSchedule = schedules.find(s => s.week_number === currentWeek);
   const currentAmount = currentWeekSchedule?.amount || null;
   const currentDate = currentWeekSchedule?.scheduled_date
@@ -114,110 +141,122 @@ export default function LoanVerify() {
   const totalPenalty = schedules.reduce((sum, s) => sum + (Number(s.penalty) || 0), 0);
 
   return (
-    <div style={styles.page}>
-      <style>{animCSS}</style>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-sm">
 
-      {/* Glow blobs */}
-      <div style={styles.blob1}></div>
-      <div style={styles.blob2}></div>
-
-      <div style={styles.container}>
-
-        {/* Top Brand */}
-        <div style={styles.brand}>
-          <div>
-            <p style={styles.brandName}>Welcome to Sindhuja Finance</p>
-            <p style={styles.brandSub}>Loan Verification System</p>
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-2xl mb-3 shadow-lg shadow-blue-600/30">
+            <FaShieldAlt size={20} className="text-white" />
           </div>
+          <h1 className="text-xl font-black text-white uppercase tracking-widest">Sindhuja Finance</h1>
+          <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mt-1">Verification System</p>
         </div>
 
-        {/* Main Card */}
-        <div style={styles.card}>
+        {/* Card */}
+        <div className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
 
-          {/* Name Header */}
-          <div style={styles.photoHeader}>
-            <div style={styles.photoWrap}>
-              {loan.member_photo_url
-                ? <img src={loan.member_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} />
-                : <FaUser size={32} color="#475569" />}
+          {/* Photo + Name */}
+          <div className="p-6 bg-slate-800/50 border-b border-white/10 flex flex-col items-center text-center gap-3">
+            <div className="relative">
+              <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-blue-500/30 shadow-xl">
+                {loan.member_photo_url ? (
+                  <img src={loan.member_photo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <FaUser className="text-slate-600" size={28} />
+                )}
+              </div>
+              <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center border-4 border-slate-800 text-white shadow-lg">
+                <FaCheckCircle size={12} />
+              </div>
             </div>
-            <h2 style={styles.memberName}>{loan.member_name}</h2>
-            {loan.status === 'CLOSED'
-              ? <div style={{ ...styles.statusChip, background: 'rgba(100,116,139,0.15)', color: '#94a3b8', borderColor: 'rgba(100,116,139,0.3)' }}>
-                  <FaLock size={9} /> Closed
-                </div>
-              : <div style={styles.statusChip}>
-                  <span style={styles.activeDot}></span> Active Loan
-                </div>}
+            <div>
+              <h2 className="text-base font-black text-white uppercase tracking-widest">{loan.member_name}</h2>
+              <p className="text-blue-400 text-xs font-mono font-bold mt-0.5">{loan.member_no}</p>
+            </div>
           </div>
 
           {/* Info Rows */}
-          <div style={styles.infoSection}>
-            <div style={styles.infoRow}>
-              <div style={styles.infoLabel}><FaCalendarAlt size={11} color="#60a5fa" /> Current Week</div>
-              <div style={styles.infoValue}>Week {currentWeek}</div>
+          <div className="divide-y divide-white/5">
+
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <FaHashtag size={11} /> Member No
+              </div>
+              <span className="text-sm font-black text-blue-400 font-mono">{loan.member_no || 'N/A'}</span>
             </div>
-            <div style={styles.divider}></div>
-            <div style={styles.infoRow}>
-              <div style={styles.infoLabel}><FaHashtag size={11} color="#60a5fa" /> Member No</div>
-              <div style={{ ...styles.infoValue, color: '#60a5fa', fontFamily: 'monospace' }}>{loan.member_no || 'N/A'}</div>
+
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div> Status
+              </div>
+              {loan.status === 'CLOSED' ? (
+                <span className="bg-slate-500/10 text-slate-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-slate-500/20 inline-flex items-center gap-2">
+                  <FaLock size={8} /> Closed
+                </span>
+              ) : (
+                <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20 inline-flex items-center gap-2">
+                  <FaCheckCircle size={8} /> Active
+                </span>
+              )}
             </div>
+
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <FaCalendarAlt size={11} /> Current Week
+              </div>
+              <span className="text-sm font-black text-white">Week {currentWeek}</span>
+            </div>
+
+            {currentAmount && (
+              <div className="mx-4 mt-2 mb-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4">
+                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <FaCalendarAlt size={10} /> This Week Due (Week {currentWeek})
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold">{currentDate}</span>
+                  <span className="text-emerald-400 text-xl font-black flex items-center gap-1">
+                    <FaRupeeSign size={14} />{Number(currentAmount).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {nextAmount && (
+              <div className="mx-4 my-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
+                <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <FaCalendarAlt size={10} /> Next Week Due (Week {currentWeek + 1})
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold">{nextDate}</span>
+                  <span className="text-amber-400 text-xl font-black flex items-center gap-1">
+                    <FaRupeeSign size={14} />{Number(nextAmount).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {totalPenalty > 0 && (
+              <div className="mx-4 my-3 bg-red-500/10 border border-red-500/30 rounded-2xl p-4">
+                <p className="text-red-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <FaLock size={10} /> Pending Penalty
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold">Total Dues</span>
+                  <span className="text-red-400 text-xl font-black flex items-center gap-1">
+                    <FaRupeeSign size={14} />{Number(totalPenalty).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+            )}
+
           </div>
 
-          {/* Current Week Amount */}
-          {currentAmount && (
-            <div style={styles.currentDueBox}>
-              <div style={styles.nextDueTop}>
-                <FaRupeeSign size={10} color="#34d399" />
-                <span style={{ ...styles.nextDueLabel, color: '#34d399' }}>This Week — Week {currentWeek}</span>
-              </div>
-              <div style={styles.nextDueRow}>
-                <span style={styles.nextDueDate}>{currentDate}</span>
-                <span style={{ ...styles.nextDueAmount, color: '#34d399' }}>
-                  <FaRupeeSign size={16} />
-                  {Number(currentAmount).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Next Due Box */}
-          {nextAmount && (
-            <div style={styles.nextDueBox}>
-              <div style={styles.nextDueTop}>
-                <FaCalendarAlt size={11} color="#fbbf24" />
-                <span style={styles.nextDueLabel}>Next Due — Week {currentWeek + 1}</span>
-              </div>
-              <div style={styles.nextDueRow}>
-                <span style={styles.nextDueDate}>{nextDate}</span>
-                <span style={styles.nextDueAmount}>
-                  <FaRupeeSign size={16} />
-                  {Number(nextAmount).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Penalty Box */}
-          {totalPenalty > 0 && (
-            <div style={styles.penaltyBox}>
-              <div style={styles.nextDueTop}>
-                <FaLock size={10} color="#ef4444" />
-                <span style={{ ...styles.nextDueLabel, color: '#ef4444' }}>Pending Penalty</span>
-              </div>
-              <div style={styles.nextDueRow}>
-                <span style={{ ...styles.nextDueDate, color: '#ef4444' }}>Total Dues</span>
-                <span style={{ ...styles.nextDueAmount, color: '#ef4444' }}>
-                  <FaRupeeSign size={16} />
-                  {Number(totalPenalty).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          )}
-
           {/* Footer */}
-          <div style={styles.cardFooter}>
-            <p style={styles.footerText}>© 2026 Sindhuja Finance Management</p>
+          <div className="px-6 py-4 bg-slate-900/50 text-center">
+            <p className="text-slate-600 text-[9px] font-bold uppercase tracking-[0.2em]">
+              © 2026 Sindhuja Finance. All rights reserved.
+            </p>
           </div>
         </div>
 
@@ -225,217 +264,3 @@ export default function LoanVerify() {
     </div>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #020617 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px 16px',
-    fontFamily: "'Inter', 'Segoe UI', sans-serif",
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  blob1: {
-    position: 'fixed', top: '-20%', left: '-20%',
-    width: '50vw', height: '50vw',
-    background: 'radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)',
-    borderRadius: '50%', pointerEvents: 'none',
-  },
-  blob2: {
-    position: 'fixed', bottom: '-20%', right: '-20%',
-    width: '50vw', height: '50vw',
-    background: 'radial-gradient(circle, rgba(139,92,246,0.07) 0%, transparent 70%)',
-    borderRadius: '50%', pointerEvents: 'none',
-  },
-  container: {
-    width: '100%', maxWidth: 400,
-    display: 'flex', flexDirection: 'column', gap: 20,
-    position: 'relative', zIndex: 1,
-    animation: 'fadeUp 0.5s ease',
-  },
-  brand: {
-    display: 'flex', alignItems: 'center', gap: 14,
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 20, padding: '14px 20px',
-    backdropFilter: 'blur(12px)',
-  },
-  brandIcon: {
-    width: 44, height: 44,
-    background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-    borderRadius: 14,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 8px 20px rgba(37,99,235,0.4)',
-  },
-  brandName: { color: '#fff', fontWeight: 900, fontSize: 16, letterSpacing: 1, margin: 0 },
-  brandSub: { color: '#60a5fa', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, margin: 0 },
-  card: {
-    background: 'rgba(15,23,42,0.9)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 28,
-    overflow: 'hidden',
-    backdropFilter: 'blur(20px)',
-    boxShadow: '0 32px 64px rgba(0,0,0,0.5)',
-  },
-  photoHeader: {
-    padding: '32px 24px 24px',
-    background: 'linear-gradient(180deg, rgba(37,99,235,0.1) 0%, transparent 100%)',
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-  },
-  photoRing: {
-    padding: 3,
-    background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-    borderRadius: '50%',
-    marginBottom: 4,
-    position: 'relative',
-  },
-  photoWrap: {
-    width: 88, height: 88,
-    background: '#1e293b',
-    borderRadius: 20,
-    border: '2px solid rgba(59,130,246,0.25)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-  },
-  verifiedBadge: {
-    marginTop: -18, marginLeft: 64,
-    width: 28, height: 28,
-    background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-    borderRadius: 10,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    border: '3px solid #0f172a',
-    boxShadow: '0 4px 12px rgba(37,99,235,0.5)',
-  },
-  memberName: {
-    color: '#fff', fontWeight: 900, fontSize: 20,
-    textTransform: 'uppercase', letterSpacing: 1, margin: 0,
-    textAlign: 'center',
-  },
-  memberChip: {
-    display: 'inline-flex', alignItems: 'center', gap: 5,
-    background: 'rgba(59,130,246,0.1)',
-    border: '1px solid rgba(59,130,246,0.25)',
-    borderRadius: 20, padding: '4px 14px',
-    color: '#60a5fa', fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
-  },
-  statusChip: {
-    display: 'inline-flex', alignItems: 'center', gap: 6,
-    background: 'rgba(16,185,129,0.1)',
-    border: '1px solid rgba(16,185,129,0.25)',
-    borderRadius: 20, padding: '5px 16px',
-    color: '#34d399', fontSize: 11, fontWeight: 800,
-    textTransform: 'uppercase', letterSpacing: 1,
-  },
-  activeDot: {
-    display: 'inline-block',
-    width: 7, height: 7,
-    borderRadius: '50%',
-    background: '#34d399',
-    boxShadow: '0 0 6px #34d399',
-    animation: 'pulse 1.5s infinite',
-  },
-  infoSection: {
-    padding: '4px 0',
-  },
-  infoRow: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '16px 24px',
-  },
-  infoLabel: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    color: '#64748b', fontSize: 11, fontWeight: 800,
-    textTransform: 'uppercase', letterSpacing: 1.5,
-  },
-  infoValue: {
-    color: '#e2e8f0', fontSize: 14, fontWeight: 900,
-  },
-  divider: {
-    height: 1,
-    background: 'rgba(255,255,255,0.04)',
-    margin: '0 24px',
-  },
-  currentDueBox: {
-    margin: '4px 16px 8px',
-    background: 'linear-gradient(135deg, rgba(52,211,153,0.1), rgba(16,185,129,0.05))',
-    border: '1px solid rgba(52,211,153,0.25)',
-    borderRadius: 18,
-    padding: '16px 20px',
-  },
-  nextDueBox: {
-    margin: '4px 16px 16px',
-    background: 'linear-gradient(135deg, rgba(251,191,36,0.1), rgba(245,158,11,0.05))',
-    border: '1px solid rgba(251,191,36,0.25)',
-    borderRadius: 18,
-    padding: '16px 20px',
-  },
-  penaltyBox: {
-    margin: '4px 16px 16px',
-    background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(220,38,38,0.05))',
-    border: '1px solid rgba(239,68,68,0.25)',
-    borderRadius: 18,
-    padding: '16px 20px',
-  },
-  nextDueTop: {
-    display: 'flex', alignItems: 'center', gap: 6,
-    marginBottom: 10,
-  },
-  nextDueLabel: {
-    color: '#fbbf24', fontSize: 10, fontWeight: 900,
-    textTransform: 'uppercase', letterSpacing: 1.5,
-  },
-  nextDueRow: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  },
-  nextDueDate: {
-    color: '#94a3b8', fontSize: 12, fontWeight: 700,
-  },
-  nextDueAmount: {
-    color: '#fbbf24', fontSize: 24, fontWeight: 900,
-    display: 'flex', alignItems: 'center', gap: 2,
-  },
-  cardFooter: {
-    padding: '14px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.04)',
-    textAlign: 'center',
-    background: 'rgba(0,0,0,0.2)',
-  },
-  footerText: {
-    color: '#334155', fontSize: 9, fontWeight: 700,
-    textTransform: 'uppercase', letterSpacing: 2, margin: 0,
-  },
-  loaderWrap: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
-    position: 'relative', zIndex: 1,
-  },
-  spinner: {
-    width: 48, height: 48,
-    border: '3px solid rgba(59,130,246,0.15)',
-    borderTop: '3px solid #3b82f6',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
-  loaderText: {
-    color: '#475569', fontSize: 11, fontWeight: 700,
-    textTransform: 'uppercase', letterSpacing: 3, margin: 0,
-  },
-};
-
-const spinnerCSS = `
-  @keyframes spin { to { transform: rotate(360deg); } }
-`;
-
-const animCSS = `
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(24px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; }
-`;
