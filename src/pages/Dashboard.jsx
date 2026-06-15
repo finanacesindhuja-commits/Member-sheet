@@ -14,8 +14,8 @@ export default function Dashboard() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const staffId = localStorage.getItem('staffId');
-  const staffName = localStorage.getItem('staffName');
+  const staffId = sessionStorage.getItem('staffId');
+  const staffName = sessionStorage.getItem('staffName');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -135,8 +135,8 @@ export default function Dashboard() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('staffId');
-    localStorage.removeItem('staffName');
+    sessionStorage.removeItem('staffId');
+    sessionStorage.removeItem('staffName');
     navigate('/login');
   };
 

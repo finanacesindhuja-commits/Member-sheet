@@ -25,8 +25,8 @@ export default function Login() {
       if (fetchError || !staff) {
         setError('Invalid Staff ID or Password!');
       } else {
-        localStorage.setItem('staffId', staff.staff_id);
-        localStorage.setItem('staffName', staff.name);
+        sessionStorage.setItem('staffId', staff.staff_id);
+        sessionStorage.setItem('staffName', staff.name);
         navigate('/dashboard');
       }
     } catch (err) {
