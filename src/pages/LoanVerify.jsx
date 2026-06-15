@@ -135,6 +135,11 @@ export default function LoanVerify() {
 
           {/* Name Header */}
           <div style={styles.photoHeader}>
+            <div style={styles.photoWrap}>
+              {loan.member_photo_url
+                ? <img src={loan.member_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} />
+                : <FaUser size={32} color="#475569" />}
+            </div>
             <h2 style={styles.memberName}>{loan.member_name}</h2>
             {loan.status === 'CLOSED'
               ? <div style={{ ...styles.statusChip, background: 'rgba(100,116,139,0.15)', color: '#94a3b8', borderColor: 'rgba(100,116,139,0.3)' }}>
@@ -271,11 +276,13 @@ const styles = {
     position: 'relative',
   },
   photoWrap: {
-    width: 80, height: 80,
+    width: 88, height: 88,
     background: '#1e293b',
-    borderRadius: '50%',
+    borderRadius: 20,
+    border: '2px solid rgba(59,130,246,0.25)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     overflow: 'hidden',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
   },
   verifiedBadge: {
     marginTop: -18, marginLeft: 64,
