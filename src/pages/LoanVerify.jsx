@@ -61,7 +61,7 @@ export default function LoanVerify() {
 
       const { data: scheduleData } = await supabase
         .from('collection_schedules')
-        .select('week_number, scheduled_date, amount')
+        .select('week_number, scheduled_date, amount, penalty')
         .eq('member_id', loanData.id)
         .order('week_number', { ascending: true });
 
@@ -111,6 +111,7 @@ export default function LoanVerify() {
   const nextDate = nextWeekSchedule?.scheduled_date
     ? new Date(nextWeekSchedule.scheduled_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : null;
+  const totalPenalty = schedules.reduce((sum, s) => sum + (Number(s.penalty) || 0), 0);
 
   return (
     <div style={styles.page}>
@@ -192,6 +193,23 @@ export default function LoanVerify() {
                 <span style={styles.nextDueAmount}>
                   <FaRupeeSign size={16} />
                   {Number(nextAmount).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Penalty Box */}
+          {totalPenalty > 0 && (
+            <div style={styles.penaltyBox}>
+              <div style={styles.nextDueTop}>
+                <FaLock size={10} color="#ef4444" />
+                <span style={{ ...styles.nextDueLabel, color: '#ef4444' }}>Pending Penalty</span>
+              </div>
+              <div style={styles.nextDueRow}>
+                <span style={{ ...styles.nextDueDate, color: '#ef4444' }}>Total Dues</span>
+                <span style={{ ...styles.nextDueAmount, color: '#ef4444' }}>
+                  <FaRupeeSign size={16} />
+                  {Number(totalPenalty).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -352,6 +370,13 @@ const styles = {
     margin: '4px 16px 16px',
     background: 'linear-gradient(135deg, rgba(251,191,36,0.1), rgba(245,158,11,0.05))',
     border: '1px solid rgba(251,191,36,0.25)',
+    borderRadius: 18,
+    padding: '16px 20px',
+  },
+  penaltyBox: {
+    margin: '4px 16px 16px',
+    background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(220,38,38,0.05))',
+    border: '1px solid rgba(239,68,68,0.25)',
     borderRadius: 18,
     padding: '16px 20px',
   },
