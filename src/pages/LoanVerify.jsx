@@ -208,56 +208,59 @@ export default function LoanVerify() {
               <span className="text-sm font-black text-white">Week {currentWeek}</span>
             </div>
 
-            {currentAmount && (
-              <div className="mx-4 mt-2 mb-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4">
-                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                  <FaCalendarAlt size={10} /> This Week Due (Week {currentWeek})
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 text-xs font-bold">{currentDate}</span>
-                  <span className="text-emerald-400 text-xl font-black flex items-center gap-1">
-                    <FaRupeeSign size={14} />{Number(currentAmount).toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {nextAmount && (
-              <div className="mx-4 my-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-                <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                  <FaCalendarAlt size={10} /> Next Week Due (Week {currentWeek + 1})
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 text-xs font-bold">{nextDate}</span>
-                  <span className="text-amber-400 text-xl font-black flex items-center gap-1">
-                    <FaRupeeSign size={14} />{Number(nextAmount).toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {totalPenalty > 0 && (
-              <div className="mx-4 my-3 bg-red-500/10 border border-red-500/30 rounded-2xl p-4">
-                <p className="text-red-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                  <FaLock size={10} /> Pending Penalty
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 text-xs font-bold">Total Dues</span>
-                  <span className="text-red-400 text-xl font-black flex items-center gap-1">
-                    <FaRupeeSign size={14} />{Number(totalPenalty).toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-            )}
-
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="px-6 py-4 bg-slate-900/50 text-center">
-            <p className="text-slate-600 text-[9px] font-bold uppercase tracking-[0.2em]">
-              © 2026 Sindhuja Finance. All rights reserved.
-            </p>
-          </div>
+        {/* Due & Penalty Boxes - Placed outside at the bottom */}
+        <div className="mt-4 space-y-3 w-full">
+          {currentAmount && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-3xl p-5 shadow-lg shadow-emerald-900/20">
+              <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                <FaCalendarAlt size={12} /> This Week Due (Week {currentWeek})
+              </p>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-emerald-500/70 text-xs font-bold">{currentDate}</span>
+                <span className="text-emerald-400 text-2xl font-black flex items-center gap-1">
+                  <FaRupeeSign size={16} />{Number(currentAmount).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {nextAmount && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-5 shadow-lg shadow-amber-900/20">
+              <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                <FaCalendarAlt size={12} /> Next Week Due (Week {currentWeek + 1})
+              </p>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-amber-500/70 text-xs font-bold">{nextDate}</span>
+                <span className="text-amber-400 text-2xl font-black flex items-center gap-1">
+                  <FaRupeeSign size={16} />{Number(nextAmount).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {totalPenalty > 0 && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-3xl p-5 shadow-lg shadow-red-900/20">
+              <p className="text-red-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                <FaLock size={12} /> Pending Penalty
+              </p>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-red-500/70 text-xs font-bold">Total Dues</span>
+                <span className="text-red-400 text-2xl font-black flex items-center gap-1">
+                  <FaRupeeSign size={16} />{Number(totalPenalty).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center">
+          <p className="text-slate-600 text-[9px] font-bold uppercase tracking-[0.2em]">
+            © 2026 Sindhuja Finance. All rights reserved.
+          </p>
         </div>
 
       </div>
