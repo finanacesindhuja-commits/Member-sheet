@@ -101,6 +101,11 @@ export default function LoanVerify() {
   const today = new Date();
   const pastSchedules = schedules.filter(s => new Date(s.scheduled_date) <= today);
   const currentWeek = pastSchedules.length > 0 ? Math.max(...pastSchedules.map(s => s.week_number)) : 1;
+  const currentWeekSchedule = schedules.find(s => s.week_number === currentWeek);
+  const currentAmount = currentWeekSchedule?.amount || null;
+  const currentDate = currentWeekSchedule?.scheduled_date
+    ? new Date(currentWeekSchedule.scheduled_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
   const nextWeekSchedule = schedules.find(s => s.week_number === currentWeek + 1);
   const nextAmount = nextWeekSchedule?.amount || null;
   const nextDate = nextWeekSchedule?.scheduled_date
@@ -169,6 +174,23 @@ export default function LoanVerify() {
               <div style={{ ...styles.infoValue, color: '#60a5fa', fontFamily: 'monospace' }}>{loan.member_no || 'N/A'}</div>
             </div>
           </div>
+
+          {/* Current Week Amount */}
+          {currentAmount && (
+            <div style={styles.currentDueBox}>
+              <div style={styles.nextDueTop}>
+                <FaRupeeSign size={10} color="#34d399" />
+                <span style={{ ...styles.nextDueLabel, color: '#34d399' }}>This Week — Week {currentWeek}</span>
+              </div>
+              <div style={styles.nextDueRow}>
+                <span style={styles.nextDueDate}>{currentDate}</span>
+                <span style={{ ...styles.nextDueAmount, color: '#34d399' }}>
+                  <FaRupeeSign size={16} />
+                  {Number(currentAmount).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Next Due Box */}
           {nextAmount && (
@@ -328,6 +350,13 @@ const styles = {
     height: 1,
     background: 'rgba(255,255,255,0.04)',
     margin: '0 24px',
+  },
+  currentDueBox: {
+    margin: '4px 16px 8px',
+    background: 'linear-gradient(135deg, rgba(52,211,153,0.1), rgba(16,185,129,0.05))',
+    border: '1px solid rgba(52,211,153,0.25)',
+    borderRadius: 18,
+    padding: '16px 20px',
   },
   nextDueBox: {
     margin: '4px 16px 16px',
