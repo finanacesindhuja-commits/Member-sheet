@@ -124,35 +124,18 @@ export default function LoanVerify() {
 
         {/* Top Brand */}
         <div style={styles.brand}>
-          <div style={styles.brandIcon}>
-            <FaShieldAlt size={22} color="#fff" />
-          </div>
           <div>
-            <p style={styles.brandName}>Sindhuja Finance</p>
-            <p style={styles.brandSub}>Loan Verification</p>
+            <p style={styles.brandName}>Welcome to Sindhuja Finance</p>
+            <p style={styles.brandSub}>Loan Verification System</p>
           </div>
         </div>
 
         {/* Main Card */}
         <div style={styles.card}>
 
-          {/* Photo Header */}
+          {/* Name Header */}
           <div style={styles.photoHeader}>
-            <div style={styles.photoRing}>
-              <div style={styles.photoWrap}>
-                {loan.member_photo_url
-                  ? <img src={loan.member_photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <FaUser size={36} color="#475569" />}
-              </div>
-            </div>
-            <div style={styles.verifiedBadge}>
-              <FaCheckCircle size={14} color="#fff" />
-            </div>
             <h2 style={styles.memberName}>{loan.member_name}</h2>
-            <div style={styles.memberChip}>
-              <FaHashtag size={9} color="#60a5fa" />
-              <span>{loan.member_no}</span>
-            </div>
             {loan.status === 'CLOSED'
               ? <div style={{ ...styles.statusChip, background: 'rgba(100,116,139,0.15)', color: '#94a3b8', borderColor: 'rgba(100,116,139,0.3)' }}>
                   <FaLock size={9} /> Closed
