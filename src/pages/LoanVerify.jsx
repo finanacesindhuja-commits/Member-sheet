@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaHashtag } from 'react-icons/fa';
+import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaHashtag, FaShieldAlt } from 'react-icons/fa';
 
 export default function LoanVerify() {
   const { loanId } = useParams();
@@ -16,14 +16,12 @@ export default function LoanVerify() {
   const fetchLoanDetails = async () => {
     try {
       setError(null);
-      // 1. Fetch Loan Basic Info
       let loanData = null;
       let loanError = null;
 
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(loanId);
 
       if (isUUID) {
-        // Fallback for older QR codes using UUID
         const { data, error } = await supabase
           .from('loans')
           .select('id, member_name, status, member_id, member_photo_url')
@@ -32,13 +30,12 @@ export default function LoanVerify() {
         loanData = data;
         loanError = error;
       } else {
-        // It's a member_no like "LN 0001", find member_id first
         const { data: memberData, error: memberError } = await supabase
           .from('members')
           .select('id')
           .ilike('member_no', loanId.trim())
           .maybeSingle();
-          
+
         if (memberError) {
           loanError = memberError;
         } else if (memberData) {
@@ -63,7 +60,6 @@ export default function LoanVerify() {
         return;
       }
 
-      // 2. Fetch Member No from members table
       let memberNo = 'N/A';
       if (loanData.member_id) {
         const { data: memberData, error: memberError } = await supabase
@@ -77,7 +73,6 @@ export default function LoanVerify() {
         }
       }
 
-      // 3. Fetch Collection Schedules separately to avoid join errors (PGRST200)
       const { data: scheduleData, error: schError } = await supabase
         .from('collection_schedules')
         .select('week_number, scheduled_date, amount')
@@ -103,17 +98,23 @@ export default function LoanVerify() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-14 w-14 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Verifying...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !loan) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-center">
-        <div className="bg-slate-900 border border-red-500/20 p-8 rounded-3xl max-w-sm">
-          <p className="text-red-400 font-bold">Verification Error</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-red-500/20 p-8 rounded-3xl w-full max-w-sm text-center shadow-2xl">
+          <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <FaShieldAlt className="text-red-400" size={28} />
+          </div>
+          <p className="text-red-400 font-black text-lg uppercase tracking-wide">Verification Failed</p>
           <p className="text-slate-500 text-sm mt-2">{error || 'Loan information not found.'}</p>
           <p className="text-slate-600 text-[10px] mt-4 font-mono break-all">ID: {loanId}</p>
         </div>
@@ -121,96 +122,91 @@ export default function LoanVerify() {
     );
   }
 
-  // Determine current week based on date
   const schedules = loan.collection_schedules || [];
   const today = new Date();
-
-  // Find the latest week that is either today or in the past
   const pastSchedules = schedules.filter(s => new Date(s.scheduled_date) <= today);
   const currentWeek = pastSchedules.length > 0
     ? Math.max(...pastSchedules.map(s => s.week_number))
     : 1;
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 flex flex-col items-center justify-center font-sans">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-sm">
+
         {/* Brand Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-white uppercase tracking-[0.2em]">Welcome to Sindhuja Finance</h1>
-          <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Verification System</p>
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-2xl mb-3 shadow-lg shadow-blue-600/30">
+            <FaShieldAlt size={20} className="text-white" />
+          </div>
+          <h1 className="text-xl font-black text-white uppercase tracking-widest">Sindhuja Finance</h1>
+          <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mt-1">Verification System</p>
         </div>
 
-        {/* Info Table Card */}
-        <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
-          <div className="p-8 bg-slate-800/50 border-b border-white/10 text-center">
-             <div className="relative inline-block mb-6">
-                <div className="w-24 h-24 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto overflow-hidden border-2 border-blue-500/30 shadow-2xl">
-                   {loan.member_photo_url ? (
-                      <img src={loan.member_photo_url} alt="" className="w-full h-full object-cover" />
-                   ) : (
-                      <FaUser className="text-slate-600 text-3xl" />
-                   )}
-                </div>
-                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center border-4 border-slate-900 text-white shadow-lg">
-                   <FaCheckCircle size={14} />
-                </div>
-             </div>
-             <h2 className="text-lg font-black text-white uppercase tracking-widest">Loan Authenticated</h2>
+        {/* Card */}
+        <div className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+
+          {/* Photo + Name */}
+          <div className="p-6 bg-slate-800/50 border-b border-white/10 flex flex-col items-center text-center gap-3">
+            <div className="relative">
+              <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-blue-500/30 shadow-xl">
+                {loan.member_photo_url ? (
+                  <img src={loan.member_photo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <FaUser className="text-slate-600" size={28} />
+                )}
+              </div>
+              <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center border-4 border-slate-800 text-white shadow-lg">
+                <FaCheckCircle size={12} />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-base font-black text-white uppercase tracking-widest">{loan.member_name}</h2>
+              <p className="text-blue-400 text-xs font-mono font-bold mt-0.5">{loan.member_no}</p>
+            </div>
           </div>
 
-          <div className="p-0">
-            <table className="w-full border-collapse">
-              <tbody className="divide-y divide-white/5">
-                <tr className="hover:bg-white/[0.02]">
-                  <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-3">
-                    <FaUser size={12} /> Name
-                  </td>
-                  <td className="px-8 py-5 text-sm font-black text-white uppercase text-right">
-                    {loan.member_name}
-                  </td>
-                </tr>
-                <tr className="hover:bg-white/[0.02]">
-                  <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-3">
-                    <FaHashtag size={12} /> Member No
-                  </td>
-                  <td className="px-8 py-5 text-sm font-black text-blue-400 font-mono text-right">
-                    {loan.member_no || 'N/A'}
-                  </td>
-                </tr>
-                <tr className="hover:bg-white/[0.02]">
-                  <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-3">
-                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div> Status
-                  </td>
-                  <td className="px-8 py-5 text-right">
-                    {loan.status === 'CLOSED' ? (
-                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20 inline-flex items-center gap-2">
-                        <FaLock size={8} /> Closed
-                      </span>
-                    ) : (
-                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20 inline-flex items-center gap-2">
-                        <FaCheckCircle size={8} /> Active
-                      </span>
-                    )}
-                  </td>
-                </tr>
-                <tr className="hover:bg-white/[0.02]">
-                  <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-3">
-                    <FaCalendarAlt size={12} /> Week Info
-                  </td>
-                  <td className="px-8 py-5 text-sm font-black text-white text-right">
-                    Week {currentWeek}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          {/* Info Rows */}
+          <div className="divide-y divide-white/5">
+
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <FaHashtag size={11} /> Member No
+              </div>
+              <span className="text-sm font-black text-blue-400 font-mono">{loan.member_no || 'N/A'}</span>
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div> Status
+              </div>
+              {loan.status === 'CLOSED' ? (
+                <span className="bg-slate-500/10 text-slate-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-slate-500/20 inline-flex items-center gap-2">
+                  <FaLock size={8} /> Closed
+                </span>
+              ) : (
+                <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20 inline-flex items-center gap-2">
+                  <FaCheckCircle size={8} /> Active
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <FaCalendarAlt size={11} /> Week Info
+              </div>
+              <span className="text-sm font-black text-white">Week {currentWeek}</span>
+            </div>
+
           </div>
 
-          <div className="p-8 bg-slate-900/50 text-center">
-            <p className="text-slate-500 text-[8px] font-bold uppercase tracking-[0.2em]">
-              © 2026 Sindhuja Finance Management. All rights reserved.
+          {/* Footer */}
+          <div className="px-6 py-4 bg-slate-900/50 text-center">
+            <p className="text-slate-600 text-[9px] font-bold uppercase tracking-[0.2em]">
+              © 2026 Sindhuja Finance. All rights reserved.
             </p>
           </div>
         </div>
+
       </div>
     </div>
   );
