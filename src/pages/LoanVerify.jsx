@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaHashtag, FaShieldAlt } from 'react-icons/fa';
+import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaHashtag, FaShieldAlt, FaRupeeSign } from 'react-icons/fa';
 
 export default function LoanVerify() {
   const { loanId } = useParams();
@@ -128,6 +128,11 @@ export default function LoanVerify() {
   const currentWeek = pastSchedules.length > 0
     ? Math.max(...pastSchedules.map(s => s.week_number))
     : 1;
+  const nextWeekSchedule = schedules.find(s => s.week_number === currentWeek + 1);
+  const nextAmount = nextWeekSchedule?.amount || null;
+  const nextDate = nextWeekSchedule?.scheduled_date
+    ? new Date(nextWeekSchedule.scheduled_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 font-sans">
@@ -192,10 +197,24 @@ export default function LoanVerify() {
 
             <div className="flex items-center justify-between px-6 py-4">
               <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
-                <FaCalendarAlt size={11} /> Week Info
+                <FaCalendarAlt size={11} /> Current Week
               </div>
               <span className="text-sm font-black text-white">Week {currentWeek}</span>
             </div>
+
+            {nextAmount && (
+              <div className="mx-4 my-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
+                <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <FaCalendarAlt size={10} /> Next Week Due (Week {currentWeek + 1})
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-xs font-bold">{nextDate}</span>
+                  <span className="text-amber-400 text-xl font-black flex items-center gap-1">
+                    <FaRupeeSign size={14} />{Number(nextAmount).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+            )}
 
           </div>
 
