@@ -98,7 +98,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('collection_schedules')
         .select('scheduled_date, amount, week_number, scheduled_day')
-        .eq('loan_id', member.id)
+        .eq('member_id', member.id)
         .order('scheduled_date', { ascending: true });
         
       if (error) throw error;
