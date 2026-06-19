@@ -233,7 +233,7 @@ export default function Dashboard() {
           
           {/* Sidebar */}
           <div className="w-full md:w-64 shrink-0">
-            <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 sticky top-8 shadow-2xl">
+            <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 md:sticky md:top-8 shadow-2xl md:h-[calc(100vh-4rem)] flex flex-col">
               <div className="mb-8">
                 <h1 className="text-xl font-black text-white leading-tight">Welcome,<br/>{staffName}</h1>
                 <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mt-2">ID: {staffId}</p>
@@ -254,7 +254,7 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              <div className="mt-8 pt-8 border-t border-white/10">
+              <div className="mt-auto pt-8 border-t border-white/10">
                 <button onClick={handleLogout} className="w-full flex items-center justify-center gap-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95">
                   <FaSignOutAlt size={16} /> Logout
                 </button>
