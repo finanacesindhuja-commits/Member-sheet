@@ -24,7 +24,7 @@ export default function LoanVerify() {
       if (isUUID) {
         const { data, error } = await supabase
           .from('loans')
-          .select('id, member_name, status, member_id, member_photo_url')
+          .select('id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at')
           .or(`id.eq.${loanId},member_id.eq.${loanId}`)
           .maybeSingle();
         loanData = data;
@@ -41,7 +41,7 @@ export default function LoanVerify() {
         } else if (memberData) {
           const { data, error } = await supabase
             .from('loans')
-            .select('id, member_name, status, member_id, member_photo_url')
+            .select('id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at')
             .eq('member_id', memberData.id)
             .maybeSingle();
           loanData = data;
@@ -83,10 +83,27 @@ export default function LoanVerify() {
         console.error('Schedule Fetch Error:', schError);
       }
 
+      let fetchedSchedules = scheduleData || [];
+      if (fetchedSchedules.length === 0) {
+        const totalWeeks = 16;
+        const amountPerWeek = Math.round((loanData.amount_sanctioned || 0) / totalWeeks);
+        const baseDate = new Date(loanData.credited_at || loanData.created_at || new Date());
+        for (let i = 1; i <= totalWeeks; i++) {
+          const sDate = new Date(baseDate);
+          sDate.setDate(sDate.getDate() + (i * 7));
+          fetchedSchedules.push({
+            week_number: i,
+            scheduled_date: sDate.toISOString(),
+            amount: amountPerWeek,
+            penalty: 0
+          });
+        }
+      }
+
       setLoan({
         ...loanData,
         member_no: memberNo,
-        collection_schedules: scheduleData || []
+        collection_schedules: fetchedSchedules
       });
     } catch (err) {
       console.error('Error fetching loan details:', err);

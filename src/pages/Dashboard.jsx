@@ -104,7 +104,25 @@ export default function Dashboard() {
         .order('scheduled_date', { ascending: true });
         
       if (error) throw error;
-      setMemberSchedules(data || []);
+      
+      let fetchedSchedules = data || [];
+      if (fetchedSchedules.length === 0) {
+        const totalWeeks = 16;
+        const amountPerWeek = Math.round((member.amount_sanctioned || 0) / totalWeeks);
+        const baseDate = new Date(member.credited_at || member.created_at || new Date());
+        for (let i = 1; i <= totalWeeks; i++) {
+          const sDate = new Date(baseDate);
+          sDate.setDate(sDate.getDate() + (i * 7));
+          fetchedSchedules.push({
+            week_number: i,
+            scheduled_date: sDate.toISOString(),
+            amount: amountPerWeek,
+            scheduled_day: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][sDate.getDay()]
+          });
+        }
+      }
+      
+      setMemberSchedules(fetchedSchedules);
       setMemberToPrint(member);
       setShowPreview(true);
 
