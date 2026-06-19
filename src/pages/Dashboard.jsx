@@ -52,7 +52,7 @@ export default function Dashboard() {
         .from('loans')
         .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, members(member_no)')
         .in('center_id', centerIds)
-        .eq('status', 'DISBURSED')
+        .in('status', ['DISBURSED', 'ARCHIVED'])
         .order('member_name', { ascending: true });
 
       if (memError) throw memError;
@@ -84,8 +84,8 @@ export default function Dashboard() {
       if (error) throw error;
       
       // Update local state
-      setMembers(prev => prev.filter(m => m.id !== loanId));
-      alert('Member loan archived and hidden from dashboard.');
+      setMembers(prev => prev.map(m => m.id === loanId ? { ...m, status: 'ARCHIVED' } : m));
+      alert('Member marked as deleted.');
     } catch (err) {
       console.error('Error archiving member:', err);
       alert('Failed to hide member.');
@@ -163,6 +163,11 @@ export default function Dashboard() {
                   NEW
                 </span>
               )}
+              {member.status === 'ARCHIVED' && (
+                <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest shadow-lg shadow-red-500/20">
+                  DELETED
+                </span>
+              )}
             </h3>
             <p className="text-slate-400 text-xs font-mono mt-1 font-bold">ID: {member.member_no || member.id}</p>
           </div>
@@ -175,13 +180,23 @@ export default function Dashboard() {
           >
             <FaPrint size={14} /> Preview
           </button>
-          <button 
-            onClick={() => handleDeleteMember(member.id)}
-            className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95"
-            title="Delete Member"
-          >
-            Delete
-          </button>
+          {member.status !== 'ARCHIVED' ? (
+            <button 
+              onClick={() => handleDeleteMember(member.id)}
+              className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95"
+              title="Delete Member"
+            >
+              Delete
+            </button>
+          ) : (
+            <button 
+              disabled
+              className="bg-slate-500/10 text-slate-500 border border-slate-500/20 px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3"
+              title="Already Deleted"
+            >
+              Deleted
+            </button>
+          )}
         </div>
       </div>
     );
