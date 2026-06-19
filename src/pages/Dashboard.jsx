@@ -106,6 +106,17 @@ export default function Dashboard() {
       setMemberSchedules(data || []);
       setMemberToPrint(member);
       setShowPreview(true);
+
+      // Mark as viewed so it disappears from "Recently Added"
+      const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
+      if (!printedIds.includes(member.id)) {
+        printedIds.push(member.id);
+        localStorage.setItem('printed_loans', JSON.stringify(printedIds));
+        setMembers(prev => prev.map(m => 
+          m.id === member.id ? { ...m, _printed: true } : m
+        ));
+      }
+
     } catch (err) {
       console.error(err);
       alert('Failed to load schedules for this member.');
@@ -115,16 +126,6 @@ export default function Dashboard() {
   };
 
   const executePrint = () => {
-    if (memberToPrint) {
-      const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
-      if (!printedIds.includes(memberToPrint.id)) {
-        printedIds.push(memberToPrint.id);
-        localStorage.setItem('printed_loans', JSON.stringify(printedIds));
-        setMembers(prev => prev.map(m => 
-          m.id === memberToPrint.id ? { ...m, _printed: true } : m
-        ));
-      }
-    }
     window.print();
   };
 
