@@ -167,7 +167,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         <div className="flex flex-col items-center shrink-0 mx-2">
           <div className="border-2 border-black p-1 bg-white shadow-sm">
             <QRCodeSVG
-              value={`${BASE_URL}/verify/${encodeURIComponent(member.member_no || member.id)}`}
+              value={`${BASE_URL}/verify/${encodeURIComponent(member.id)}`}
               size={160}
               level="L"
               includeMargin={true}
