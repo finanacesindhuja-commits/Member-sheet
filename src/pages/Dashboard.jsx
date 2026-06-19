@@ -262,19 +262,36 @@ export default function Dashboard() {
               
               {/* Recently Added Section */}
               {recentMembers.length > 0 && !searchQuery && (
-                <div className="bg-green-900/20 border border-green-500/30 rounded-3xl overflow-hidden shadow-2xl shadow-green-900/10 mb-8">
-                  <div className="p-6 border-b border-green-500/20 bg-green-800/30 flex justify-between items-center">
+                <div className="mb-8 space-y-4">
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-2xl p-4 flex justify-between items-center shadow-lg shadow-green-900/10">
                     <h2 className="text-xl font-bold text-green-400 tracking-tight flex items-center gap-2">
                       <span className="w-2 h-8 bg-green-400 rounded-full"></span>
                       Recently Added
                     </h2>
                     <span className="bg-green-500/20 text-green-300 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-green-500/30">
-                      {recentMembers.length} New
+                      {recentMembers.length} Total New
                     </span>
                   </div>
-                  <div className="divide-y divide-white/5">
-                    {recentMembers.map(member => renderMemberRow(member))}
-                  </div>
+                  
+                  {centers.map(center => {
+                    const centerRecent = recentMembers.filter(m => m.center_id === center.id);
+                    if (centerRecent.length === 0) return null;
+                    return (
+                      <div key={`recent-${center.id}`} className="bg-green-900/10 border border-green-500/20 rounded-3xl overflow-hidden shadow-xl shadow-green-900/5">
+                        <div className="p-4 border-b border-green-500/10 bg-green-800/20 flex justify-between items-center">
+                          <h3 className="text-md font-bold text-green-300 tracking-tight flex items-center gap-2">
+                            {center.name} Center
+                          </h3>
+                          <span className="bg-green-500/10 text-green-400 text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-widest border border-green-500/20">
+                            {centerRecent.length} Members
+                          </span>
+                        </div>
+                        <div className="divide-y divide-green-500/10">
+                          {centerRecent.map(member => renderMemberRow(member))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
