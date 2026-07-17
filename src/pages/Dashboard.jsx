@@ -175,7 +175,7 @@ export default function Dashboard() {
                <img src={member.member_photo_url} alt="" className="w-full h-full object-cover" />
              ) : <FaUsers className="text-slate-500" size={24} />}
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="font-black text-white text-lg uppercase tracking-tight flex items-center gap-2">
               {member.member_name}
               {isNew && (
@@ -189,7 +189,21 @@ export default function Dashboard() {
                 </span>
               )}
             </h3>
-            <p className="text-slate-400 text-xs font-mono mt-1 font-bold">ID: {member.member_no || member.id}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+              <span className="text-slate-400 text-xs font-mono font-bold bg-slate-800/50 px-2 py-1 rounded-md border border-white/5">
+                ID: {member.member_no || member.id}
+              </span>
+              {member.mobile_no && (
+                <span className="text-slate-300 text-xs font-bold bg-slate-800/50 px-2 py-1 rounded-md border border-white/5 flex items-center gap-1">
+                  📞 {member.mobile_no}
+                </span>
+              )}
+              {member.amount_sanctioned ? (
+                <span className="text-blue-400 text-xs font-black bg-blue-900/20 px-2 py-1 rounded-md border border-blue-500/20">
+                  ₹{member.amount_sanctioned.toLocaleString()}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex gap-3 w-full md:w-auto">

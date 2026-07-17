@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaHashtag, FaShieldAlt, FaRupeeSign } from 'react-icons/fa';
+import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaHashtag, FaShieldAlt, FaRupeeSign, FaPhone } from 'react-icons/fa';
 
 export default function LoanVerify() {
   const { loanId } = useParams();
@@ -21,15 +21,18 @@ export default function LoanVerify() {
 
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(loanId);
 
+      const LOAN_SELECT = 'id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at, mobile_no, nominee_mobile, center_id';
+
       if (isUUID) {
         const { data, error } = await supabase
           .from('loans')
-          .select('id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at')
+          .select(LOAN_SELECT)
           .or(`id.eq.${loanId},member_id.eq.${loanId}`)
           .maybeSingle();
         loanData = data;
         loanError = error;
       } else {
+        // member_no scan — look up in members table first
         const { data: memberData, error: memberError } = await supabase
           .from('members')
           .select('id')
@@ -41,8 +44,20 @@ export default function LoanVerify() {
         } else if (memberData) {
           const { data, error } = await supabase
             .from('loans')
-            .select('id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at')
+            .select(LOAN_SELECT)
             .eq('member_id', memberData.id)
+            .in('status', ['DISBURSED', 'ARCHIVED', 'ACTIVE', 'CLOSED'])
+            .order('credited_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          loanData = data;
+          loanError = error;
+        } else {
+          // Try direct member_no search in loans table (fallback)
+          const { data, error } = await supabase
+            .from('loans')
+            .select(LOAN_SELECT + ', members!inner(member_no)')
+            .ilike('members.member_no', loanId.trim())
             .maybeSingle();
           loanData = data;
           loanError = error;
@@ -189,7 +204,12 @@ export default function LoanVerify() {
             </div>
             <div>
               <h2 className="text-base font-black text-white uppercase tracking-widest">{loan.member_name}</h2>
-              <p className="text-blue-400 text-xs font-mono font-bold mt-0.5">{loan.member_no}</p>
+              <p className="text-blue-400 text-xs font-mono font-bold mt-0.5">Member No: {loan.member_no}</p>
+              {loan.mobile_no && (
+                <p className="text-slate-400 text-xs font-bold mt-0.5 flex items-center justify-center gap-1">
+                  <FaPhone size={9} /> {loan.mobile_no}
+                </p>
+              )}
             </div>
           </div>
 
@@ -201,6 +221,31 @@ export default function LoanVerify() {
                 <FaHashtag size={11} /> Member No
               </div>
               <span className="text-sm font-black text-blue-400 font-mono">{loan.member_no || 'N/A'}</span>
+            </div>
+
+            {loan.mobile_no && (
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                  <FaPhone size={11} /> Mobile
+                </div>
+                <span className="text-sm font-black text-white font-mono">{loan.mobile_no}</span>
+              </div>
+            )}
+
+            {loan.credited_at && (
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                  <FaCalendarAlt size={11} /> Disbursed On
+                </div>
+                <span className="text-sm font-black text-white">{new Date(loan.credited_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <FaRupeeSign size={11} /> Loan Amount
+              </div>
+              <span className="text-sm font-black text-emerald-400">₹{Number(loan.amount_sanctioned || 0).toLocaleString('en-IN')}</span>
             </div>
 
             <div className="flex items-center justify-between px-6 py-4">
