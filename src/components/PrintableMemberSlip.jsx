@@ -119,11 +119,11 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
           {rows.map((sch, index) => {
             const isSchedule = sch && sch.scheduled_date;
             // EMI total amount from schedule
-            const emiAmount = isSchedule ? Number(sch.amount) : 0;
+            const emiAmount = isSchedule && sch.amount ? Number(sch.amount) : null;
             // Principal = loan amount ÷ total weeks (pre-calculated)
-            const principal = isSchedule ? principalPerWeek : null;
+            const principal = (isSchedule && emiAmount) ? principalPerWeek : null;
             // Interest = EMI - principal (can be 0 if flat loan)
-            const interest = isSchedule ? Math.max(0, Math.round(emiAmount - principalPerWeek)) : null;
+            const interest = (isSchedule && emiAmount) ? Math.max(0, Math.round(emiAmount - principalPerWeek)) : null;
 
             return (
               <tr key={index} className="h-8">
@@ -134,13 +134,13 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
                   {isSchedule ? new Date(sch.scheduled_date).toLocaleDateString('en-GB') : ''}
                 </td>
                 <td className="border-2 border-black px-2 py-1 text-right font-bold text-black">
-                  {isSchedule ? `₹${principal.toLocaleString()}` : ''}
+                  {principal ? `₹${principal.toLocaleString()}` : ''}
                 </td>
                 <td className="border-2 border-black px-2 py-1 text-right font-bold text-black">
-                  {isSchedule ? (interest > 0 ? `₹${interest.toLocaleString()}` : '—') : ''}
+                  {interest !== null ? (interest > 0 ? `₹${interest.toLocaleString()}` : '—') : ''}
                 </td>
                 <td className="border-2 border-black px-2 py-1 text-right font-black text-sm">
-                  {isSchedule ? `₹${emiAmount.toLocaleString()}` : ''}
+                  {emiAmount ? `₹${emiAmount.toLocaleString()}` : ''}
                 </td>
                 <td className="border-2 border-black px-1 py-1"></td>
                 <td className="border-2 border-black px-2 py-1"></td>

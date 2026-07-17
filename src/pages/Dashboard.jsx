@@ -108,7 +108,6 @@ export default function Dashboard() {
       let fetchedSchedules = data || [];
       if (fetchedSchedules.length === 0) {
         const totalWeeks = 16;
-        const amountPerWeek = Math.round((member.amount_sanctioned || 0) / totalWeeks);
         const baseDate = new Date(member.credited_at || member.created_at || new Date());
         for (let i = 1; i <= totalWeeks; i++) {
           const sDate = new Date(baseDate);
@@ -116,7 +115,7 @@ export default function Dashboard() {
           fetchedSchedules.push({
             week_number: i,
             scheduled_date: sDate.toISOString(),
-            amount: amountPerWeek,
+            amount: null,
             scheduled_day: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][sDate.getDay()]
           });
         }
