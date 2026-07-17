@@ -93,7 +93,7 @@ export default function LoanVerify() {
       const { data: scheduleData, error: schError } = await supabase
         .from('collection_schedules')
         .select('week_number, scheduled_date, amount, penalty')
-        .eq('member_id', loanData.id)
+        .eq('loan_id', loanData.id)
         .order('week_number', { ascending: true });
 
       if (schError) {
