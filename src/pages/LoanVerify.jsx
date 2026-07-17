@@ -102,8 +102,16 @@ export default function LoanVerify() {
 
       let fetchedSchedules = scheduleData || [];
       if (fetchedSchedules.length === 0) {
-        const totalWeeks = 16;
-        const amountPerWeek = Math.round((loanData.amount_sanctioned || 0) / totalWeeks);
+        const SCHEME_STANDARDS = {
+          10000: { weeks: 12, emi: 1100 },
+          11000: { weeks: 15, emi: 1100 },
+          12000: { weeks: 16, emi: 1020 },
+          13000: { weeks: 18, emi: 990 },
+          15000: { weeks: 22, emi: 1100 },
+        };
+        const scheme = SCHEME_STANDARDS[loanData.amount_sanctioned];
+        const totalWeeks = scheme ? scheme.weeks : 16;
+        const emiAmount = scheme ? scheme.emi : Math.round((loanData.amount_sanctioned || 0) / 16);
         const baseDate = new Date(loanData.credited_at || loanData.created_at || new Date());
         for (let i = 1; i <= totalWeeks; i++) {
           const sDate = new Date(baseDate);
@@ -111,7 +119,7 @@ export default function LoanVerify() {
           fetchedSchedules.push({
             week_number: i,
             scheduled_date: sDate.toISOString(),
-            amount: amountPerWeek,
+            amount: emiAmount,
             penalty: 0
           });
         }

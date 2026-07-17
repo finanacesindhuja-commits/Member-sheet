@@ -15,11 +15,20 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
     ? (schedules[0].scheduled_day || days[new Date(schedules[0].scheduled_date).getDay()])
     : 'N/A';
 
+  // Standard scheme lookup - weeks for each loan amount
+  const SCHEME_STANDARDS = {
+    10000: { weeks: 12, emi: 1100 },
+    11000: { weeks: 15, emi: 1100 },
+    12000: { weeks: 16, emi: 1020 },
+    13000: { weeks: 18, emi: 990 },
+    15000: { weeks: 22, emi: 1100 },
+  };
+  const loanAmount = Number(member.amount_sanctioned) || 0;
+  const scheme = SCHEME_STANDARDS[loanAmount];
+
   // Pre-calculate principal per instalment (loan amount ÷ number of weeks)
-  const totalWeeks = schedules.length > 0 ? schedules.length : 1;
-  const principalPerWeek = schedules.length > 0
-    ? Math.round(Number(member.amount_sanctioned) / totalWeeks)
-    : 0;
+  const totalWeeks = scheme ? scheme.weeks : (schedules.length > 0 ? schedules.length : 16);
+  const principalPerWeek = Math.round(loanAmount / totalWeeks);
 
   return (
     <div className={`p-4 w-[210mm] mx-auto bg-white text-black font-sans box-border relative ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only h-[296mm] overflow-hidden'}`}>
