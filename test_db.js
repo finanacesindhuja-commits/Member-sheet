@@ -6,14 +6,15 @@ const supabaseUrl = env.match(/VITE_SUPABASE_URL=(.*)/)[1].trim();
 const supabaseKey = env.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1].trim();
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function checkP() {
-  const { data: loans } = await supabase.from('loans').select('id, amount_sanctioned');
+async function checkT() {
+  const { data: loans } = await supabase.from('loans').select('id, amount_sanctioned, scheme_name');
+  
   for (const loan of loans) {
-    const { data: sch } = await supabase.from('collection_schedules').select('amount').eq('loan_id', loan.id).limit(1);
+    const { data: sch } = await supabase.from('collection_schedules').select('amount, week_number').eq('loan_id', loan.id).limit(1);
     if (sch && sch.length > 0) {
-      console.log(`Loan: ${loan.amount_sanctioned} -> EMI: ${sch[0].amount}`);
+      console.log(`Loan: ${loan.amount_sanctioned}, Scheme: ${loan.scheme_name} -> EMI: ${sch[0].amount}`);
     }
   }
 }
 
-checkP();
+checkT();
