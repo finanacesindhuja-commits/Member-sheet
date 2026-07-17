@@ -44,41 +44,41 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         <div className="flex justify-between items-start gap-8">
           <div className="flex-1 grid grid-cols-3 gap-x-6 gap-y-3 text-[11px]">
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Member Name</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Member Name</span>
               <span className="font-black text-base">{member.member_name}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Loan Amount</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Loan Amount</span>
               <span className="font-black text-base">₹{Number(member.amount_sanctioned).toLocaleString()}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Center Name</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Center Name</span>
               <span className="font-bold uppercase text-blue-800">{centerName || 'N/A'}</span>
             </div>
 
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Member Mobile</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Member Mobile</span>
               <span className="font-bold">{member.mobile_no || 'N/A'}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Nominee Mobile</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Nominee Mobile</span>
               <span className="font-bold">{member.nominee_mobile || 'N/A'}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Disbursement Date</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Disbursement Date</span>
               <span className="font-bold">{member.credited_at ? new Date(member.credited_at).toLocaleDateString('en-GB') : 'N/A'}</span>
             </div>
 
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Collection Day</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Collection Day</span>
               <span className="font-bold uppercase text-blue-600">{collectionDay}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Collection Time</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Collection Time</span>
               <div className="w-28 h-6 border border-black mt-1 rounded-sm bg-white"></div>
             </div>
             <div className="border-b border-gray-100 pb-1">
-              <span className="font-bold block text-gray-500 uppercase text-[9px]">Member ID</span>
+              <span className="font-bold block text-gray-800 uppercase text-[9px]">Member ID</span>
               <span className="font-black text-base text-red-600">{member.member_no || member.id}</span>
             </div>
           </div>
@@ -89,7 +89,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
               {member.member_photo_url ? (
                 <img src={member.member_photo_url} alt="Member" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-[10px] text-gray-400 font-bold uppercase p-2 text-center leading-tight">Photo</span>
+                <span className="text-[10px] text-gray-600 font-bold uppercase p-2 text-center leading-tight">Photo</span>
               )}
             </div>
             <div className="mt-2 flex flex-col items-center">
@@ -133,10 +133,10 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
                 <td className="border-2 border-black px-2 py-1 font-mono font-bold">
                   {isSchedule ? new Date(sch.scheduled_date).toLocaleDateString('en-GB') : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-500">
+                <td className="border-2 border-black px-2 py-1 text-right font-bold text-black">
                   {isSchedule ? `₹${principal.toLocaleString()}` : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-bold text-gray-500">
+                <td className="border-2 border-black px-2 py-1 text-right font-bold text-black">
                   {isSchedule ? (interest > 0 ? `₹${interest.toLocaleString()}` : '—') : ''}
                 </td>
                 <td className="border-2 border-black px-2 py-1 text-right font-black text-sm">
@@ -181,7 +181,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
           <div className="flex justify-end items-center relative">
             {/* Company Seal - Positioned behind */}
             <div className="absolute right-4 bottom-0 opacity-20 pointer-events-none">
-              <div className="w-24 h-24 border-4 border-double border-gray-400 rounded-full flex items-center justify-center text-[10px] text-gray-400 font-bold uppercase text-center p-4 transform -rotate-12">
+              <div className="w-24 h-24 border-4 border-double border-gray-400 rounded-full flex items-center justify-center text-[10px] text-gray-600 font-bold uppercase text-center p-4 transform -rotate-12">
                 Company Seal
               </div>
             </div>
