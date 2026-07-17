@@ -16,52 +16,54 @@ export default function LoanVerify() {
   const fetchLoanDetails = async () => {
     try {
       setError(null);
+      const LOAN_SELECT = 'id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at, mobile_no, nominee_mobile, center_id';
+
       let loanData = null;
       let loanError = null;
 
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(loanId);
+      // 1. First try treating loanId as a member_no
+      const { data: memberData, error: memberError } = await supabase
+        .from('members')
+        .select('id')
+        .ilike('member_no', loanId.trim())
+        .maybeSingle();
 
-      const LOAN_SELECT = 'id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at, mobile_no, nominee_mobile, center_id';
-
-      if (isUUID) {
+      if (memberData) {
         const { data, error } = await supabase
           .from('loans')
           .select(LOAN_SELECT)
-          .or(`id.eq.${loanId},member_id.eq.${loanId}`)
+          .eq('member_id', memberData.id)
+          .order('credited_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
         loanData = data;
         loanError = error;
-      } else {
-        // member_no scan — look up in members table first
-        const { data: memberData, error: memberError } = await supabase
-          .from('members')
-          .select('id')
-          .ilike('member_no', loanId.trim())
-          .maybeSingle();
+      }
 
-        if (memberError) {
-          loanError = memberError;
-        } else if (memberData) {
-          const { data, error } = await supabase
-            .from('loans')
-            .select(LOAN_SELECT)
-            .eq('member_id', memberData.id)
-            .in('status', ['DISBURSED', 'ARCHIVED', 'ACTIVE', 'CLOSED'])
-            .order('credited_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          loanData = data;
-          loanError = error;
-        } else {
-          // Try direct member_no search in loans table (fallback)
-          const { data, error } = await supabase
-            .from('loans')
-            .select(LOAN_SELECT + ', members!inner(member_no)')
-            .ilike('members.member_no', loanId.trim())
-            .maybeSingle();
-          loanData = data;
-          loanError = error;
-        }
+      // 2. If not found by member_no, try integer ID (Old Slips)
+      if (!loanData && !isNaN(loanId.trim()) && loanId.trim() !== '') {
+        const numericId = parseInt(loanId.trim(), 10);
+        const { data, error } = await supabase
+          .from('loans')
+          .select(LOAN_SELECT)
+          .or(`id.eq.${numericId},member_id.eq.${numericId}`)
+          .order('credited_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        loanData = data;
+        loanError = error || loanError;
+      }
+
+      // 3. If still not found, try UUID (Just in case)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(loanId.trim());
+      if (!loanData && isUUID) {
+        const { data, error } = await supabase
+          .from('loans')
+          .select(LOAN_SELECT)
+          .or(`id.eq.${loanId.trim()},member_id.eq.${loanId.trim()}`)
+          .maybeSingle();
+        loanData = data;
+        loanError = error || loanError;
       }
 
       if (loanError) {
