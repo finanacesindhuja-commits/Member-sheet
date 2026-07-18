@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaHashtag, FaShieldAlt, FaRupeeSign, FaPhone } from 'react-icons/fa';
+import { FaCheckCircle, FaLock, FaCalendarAlt, FaUser, FaShieldAlt, FaRupeeSign, FaPhone } from 'react-icons/fa';
 
 export default function LoanVerify() {
   const { loanId } = useParams();
@@ -166,16 +166,54 @@ export default function LoanVerify() {
 
   const schedules = loan.collection_schedules || [];
   const today = new Date();
-  const pastSchedules = schedules.filter(s => new Date(s.scheduled_date) <= today);
-  const currentWeek = pastSchedules.length > 0
-    ? Math.max(...pastSchedules.map(s => s.week_number))
-    : 1;
-  const currentWeekSchedule = schedules.find(s => s.week_number === currentWeek);
-  const currentAmount = currentWeekSchedule?.amount || null;
-  const currentDate = currentWeekSchedule?.scheduled_date
-    ? new Date(currentWeekSchedule.scheduled_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  today.setHours(0, 0, 0, 0);
+
+  // Find "this week" schedule: the schedule whose date is within the current week
+  // (from Monday to Sunday of this week), or the closest upcoming one
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+
+  const startOfNextWeek = new Date(endOfWeek);
+  startOfNextWeek.setDate(endOfWeek.getDate() + 1);
+  const endOfNextWeek = new Date(startOfNextWeek);
+  endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+
+  // This week: schedule falling in current Mon-Sun range
+  let thisWeekSchedule = schedules.find(s => {
+    const d = new Date(s.scheduled_date);
+    d.setHours(0, 0, 0, 0);
+    return d >= startOfWeek && d <= endOfWeek;
+  });
+
+  // If no schedule this week, find the closest upcoming schedule
+  if (!thisWeekSchedule) {
+    const upcoming = schedules.filter(s => new Date(s.scheduled_date) >= today);
+    if (upcoming.length > 0) {
+      thisWeekSchedule = upcoming.reduce((closest, s) =>
+        new Date(s.scheduled_date) < new Date(closest.scheduled_date) ? s : closest
+      );
+    }
+  }
+
+  // Next week: schedule falling in next Mon-Sun range
+  let nextWeekSchedule = schedules.find(s => {
+    const d = new Date(s.scheduled_date);
+    d.setHours(0, 0, 0, 0);
+    return d >= startOfNextWeek && d <= endOfNextWeek;
+  });
+
+  // If no schedule next week but we have this week, use week_number + 1
+  if (!nextWeekSchedule && thisWeekSchedule) {
+    nextWeekSchedule = schedules.find(s => s.week_number === (thisWeekSchedule.week_number + 1));
+  }
+
+  const currentWeek = thisWeekSchedule?.week_number || 1;
+  const currentAmount = thisWeekSchedule?.amount || null;
+  const currentDate = thisWeekSchedule?.scheduled_date
+    ? new Date(thisWeekSchedule.scheduled_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : null;
-  const nextWeekSchedule = schedules.find(s => s.week_number === currentWeek + 1);
   const nextAmount = nextWeekSchedule?.amount || null;
   const nextDate = nextWeekSchedule?.scheduled_date
     ? new Date(nextWeekSchedule.scheduled_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -183,41 +221,130 @@ export default function LoanVerify() {
   const totalPenalty = schedules.reduce((sum, s) => sum + (Number(s.penalty) || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center p-4 font-sans pb-10">
       <div className="w-full max-w-sm">
 
         {/* Brand Header */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-5 pt-6">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-2xl mb-3 shadow-lg shadow-blue-600/30">
             <FaShieldAlt size={20} className="text-white" />
           </div>
           <h1 className="text-xl font-black text-white uppercase tracking-widest">Sindhuja Finance</h1>
-          <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mt-1">Verification System</p>
+          <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mt-1">Loan Verification</p>
         </div>
 
-        {/* Card */}
+        {/* ===== THIS WEEK & NEXT WEEK - PROMINENT TOP SECTION ===== */}
+        <div className="mb-5 space-y-3">
+
+          {/* THIS WEEK - Big Bold Card */}
+          {currentAmount ? (
+            <div className="relative overflow-hidden rounded-3xl border-2 border-emerald-500/50 shadow-2xl shadow-emerald-900/40"
+              style={{ background: 'linear-gradient(135deg, #052e16 0%, #064e3b 50%, #065f46 100%)' }}>
+              <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10"
+                style={{ background: 'radial-gradient(circle, #34d399, transparent)', transform: 'translate(30%, -30%)' }} />
+              <div className="p-5 relative z-10">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-lg shadow-emerald-400/50"></div>
+                  <span className="text-emerald-300 text-[11px] font-black uppercase tracking-[0.2em]">இந்த வாரம் கட்ட வேண்டியது</span>
+                </div>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-emerald-400/60 text-[10px] font-bold uppercase">This Week • Week {currentWeek}</p>
+                    <p className="text-emerald-300/80 text-xs font-bold mt-0.5">{currentDate}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-emerald-300 text-2xl font-black">₹</span>
+                    <span className="text-white text-4xl font-black leading-none">{Number(currentAmount).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-slate-700 p-5 text-center text-slate-500 text-sm font-bold">
+              No collection scheduled this week
+            </div>
+          )}
+
+          {/* NEXT WEEK - Bold Card */}
+          {nextAmount ? (
+            <div className="relative overflow-hidden rounded-3xl border-2 border-amber-500/40 shadow-xl shadow-amber-900/30"
+              style={{ background: 'linear-gradient(135deg, #1c1400 0%, #292100 50%, #3d2f00 100%)' }}>
+              <div className="absolute top-0 right-0 w-28 h-28 rounded-full opacity-10"
+                style={{ background: 'radial-gradient(circle, #fbbf24, transparent)', transform: 'translate(30%, -30%)' }} />
+              <div className="p-5 relative z-10">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                  <span className="text-amber-300 text-[11px] font-black uppercase tracking-[0.2em]">அடுத்த வாரம் கட்ட வேண்டியது</span>
+                </div>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-amber-400/60 text-[10px] font-bold uppercase">Next Week • Week {currentWeek + 1}</p>
+                    <p className="text-amber-300/80 text-xs font-bold mt-0.5">{nextDate}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-amber-300 text-2xl font-black">₹</span>
+                    <span className="text-white text-4xl font-black leading-none">{Number(nextAmount).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-slate-700/50 p-4 text-center text-slate-600 text-xs font-bold">
+              No collection scheduled next week
+            </div>
+          )}
+
+          {/* Penalty if any */}
+          {totalPenalty > 0 && (
+            <div className="relative overflow-hidden rounded-3xl border-2 border-red-500/40 shadow-xl shadow-red-900/30"
+              style={{ background: 'linear-gradient(135deg, #1c0000 0%, #2d0000 100%)' }}>
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <FaLock className="text-red-400" size={11} />
+                  <span className="text-red-300 text-[11px] font-black uppercase tracking-[0.15em]">Pending Penalty</span>
+                </div>
+                <div className="flex items-end justify-between">
+                  <p className="text-red-400/60 text-xs font-bold">Total Outstanding</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-red-300 text-2xl font-black">₹</span>
+                    <span className="text-white text-4xl font-black leading-none">{Number(totalPenalty).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex-1 h-px bg-white/10"></div>
+          <span className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Member Details</span>
+          <div className="flex-1 h-px bg-white/10"></div>
+        </div>
+
+        {/* Member Card */}
         <div className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
 
           {/* Photo + Name */}
-          <div className="p-6 bg-slate-800/50 border-b border-white/10 flex flex-col items-center text-center gap-3">
-            <div className="relative">
-              <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-blue-500/30 shadow-xl">
+          <div className="p-5 bg-slate-800/50 border-b border-white/10 flex items-center gap-4">
+            <div className="relative shrink-0">
+              <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-blue-500/30 shadow-xl">
                 {loan.member_photo_url ? (
                   <img src={loan.member_photo_url} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <FaUser className="text-slate-600" size={28} />
+                  <FaUser className="text-slate-600" size={22} />
                 )}
               </div>
-              <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center border-4 border-slate-800 text-white shadow-lg">
-                <FaCheckCircle size={12} />
+              <div className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center border-3 border-slate-800 text-white shadow-lg">
+                <FaCheckCircle size={10} />
               </div>
             </div>
             <div>
-              <h2 className="text-base font-black text-white uppercase tracking-widest">{loan.member_name}</h2>
-              <p className="text-blue-400 text-xs font-mono font-bold mt-0.5">Member No: {loan.member_no}</p>
+              <h2 className="text-sm font-black text-white uppercase tracking-wider">{loan.member_name}</h2>
+              <p className="text-blue-400 text-xs font-mono font-bold mt-0.5">{loan.member_no}</p>
               {loan.mobile_no && (
-                <p className="text-slate-400 text-xs font-bold mt-0.5 flex items-center justify-center gap-1">
-                  <FaPhone size={9} /> {loan.mobile_no}
+                <p className="text-slate-400 text-[11px] font-bold mt-0.5 flex items-center gap-1">
+                  <FaPhone size={8} /> {loan.mobile_no}
                 </p>
               )}
             </div>
@@ -226,106 +353,45 @@ export default function LoanVerify() {
           {/* Info Rows */}
           <div className="divide-y divide-white/5">
 
-            <div className="flex items-center justify-between px-6 py-4">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
-                <FaHashtag size={11} /> Member No
-              </div>
-              <span className="text-sm font-black text-blue-400 font-mono">{loan.member_no || 'N/A'}</span>
-            </div>
-
-            {loan.mobile_no && (
-              <div className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
-                  <FaPhone size={11} /> Mobile
-                </div>
-                <span className="text-sm font-black text-white font-mono">{loan.mobile_no}</span>
-              </div>
-            )}
-
-            {loan.credited_at && (
-              <div className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
-                  <FaCalendarAlt size={11} /> Disbursed On
-                </div>
-                <span className="text-sm font-black text-white">{new Date(loan.credited_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between px-6 py-4">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
-                <FaRupeeSign size={11} /> Loan Amount
+            <div className="flex items-center justify-between px-5 py-3">
+              <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                <FaRupeeSign size={10} /> Loan Amount
               </div>
               <span className="text-sm font-black text-emerald-400">₹{Number(loan.amount_sanctioned || 0).toLocaleString('en-IN')}</span>
             </div>
 
-            <div className="flex items-center justify-between px-6 py-4">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
+            {loan.credited_at && (
+              <div className="flex items-center justify-between px-5 py-3">
+                <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                  <FaCalendarAlt size={10} /> Disbursed On
+                </div>
+                <span className="text-xs font-black text-white">{new Date(loan.credited_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between px-5 py-3">
+              <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                <FaCalendarAlt size={10} /> Current Week
+              </div>
+              <span className="text-xs font-black text-white">Week {currentWeek}</span>
+            </div>
+
+            <div className="flex items-center justify-between px-5 py-3">
+              <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-widest">
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div> Status
               </div>
               {loan.status === 'CLOSED' ? (
-                <span className="bg-slate-500/10 text-slate-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-slate-500/20 inline-flex items-center gap-2">
-                  <FaLock size={8} /> Closed
+                <span className="bg-slate-500/10 text-slate-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-slate-500/20 inline-flex items-center gap-1.5">
+                  <FaLock size={7} /> Closed
                 </span>
               ) : (
-                <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20 inline-flex items-center gap-2">
-                  <FaCheckCircle size={8} /> Active
+                <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20 inline-flex items-center gap-1.5">
+                  <FaCheckCircle size={7} /> Active
                 </span>
               )}
             </div>
 
-            <div className="flex items-center justify-between px-6 py-4">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-black uppercase tracking-widest">
-                <FaCalendarAlt size={11} /> Current Week
-              </div>
-              <span className="text-sm font-black text-white">Week {currentWeek}</span>
-            </div>
-
           </div>
-        </div>
-
-        {/* Due & Penalty Boxes - Placed outside at the bottom */}
-        <div className="mt-4 space-y-3 w-full">
-          {currentAmount && (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-3xl p-5 shadow-lg shadow-emerald-900/20">
-              <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                <FaCalendarAlt size={12} /> This Week Due (Week {currentWeek})
-              </p>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-emerald-500/70 text-xs font-bold">{currentDate}</span>
-                <span className="text-emerald-400 text-2xl font-black flex items-center gap-1">
-                  <FaRupeeSign size={16} />{Number(currentAmount).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {nextAmount && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-5 shadow-lg shadow-amber-900/20">
-              <p className="text-amber-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                <FaCalendarAlt size={12} /> Next Week Due (Week {currentWeek + 1})
-              </p>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-amber-500/70 text-xs font-bold">{nextDate}</span>
-                <span className="text-amber-400 text-2xl font-black flex items-center gap-1">
-                  <FaRupeeSign size={16} />{Number(nextAmount).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {totalPenalty > 0 && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-3xl p-5 shadow-lg shadow-red-900/20">
-              <p className="text-red-400 text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                <FaLock size={12} /> Pending Penalty
-              </p>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-red-500/70 text-xs font-bold">Total Dues</span>
-                <span className="text-red-400 text-2xl font-black flex items-center gap-1">
-                  <FaRupeeSign size={16} />{Number(totalPenalty).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
