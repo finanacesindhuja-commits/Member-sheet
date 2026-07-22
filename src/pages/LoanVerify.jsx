@@ -93,37 +93,14 @@ export default function LoanVerify() {
       const { data: scheduleData, error: schError } = await supabase
         .from('collection_schedules')
         .select('week_number, scheduled_date, amount, penalty')
-        .or(`loan_id.eq.${loanData.id},member_id.eq.${loanData.id}`)
+        .or(`loan_id.eq.${loanData.id},and(loan_id.is.null,member_id.eq.${loanData.id})`)
         .order('week_number', { ascending: true });
 
       if (schError) {
         console.error('Schedule Fetch Error:', schError);
       }
 
-      let fetchedSchedules = scheduleData || [];
-      if (fetchedSchedules.length === 0) {
-        const SCHEME_STANDARDS = {
-          10000: { weeks: 12, emi: 1100 },
-          11000: { weeks: 15, emi: 1100 },
-          12000: { weeks: 16, emi: 1020 },
-          13000: { weeks: 18, emi: 990 },
-          15000: { weeks: 22, emi: 1100 },
-        };
-        const scheme = SCHEME_STANDARDS[loanData.amount_sanctioned];
-        const totalWeeks = scheme ? scheme.weeks : 16;
-        const emiAmount = scheme ? scheme.emi : Math.round((loanData.amount_sanctioned || 0) / 16);
-        const baseDate = new Date(loanData.credited_at || loanData.created_at || new Date());
-        for (let i = 1; i <= totalWeeks; i++) {
-          const sDate = new Date(baseDate);
-          sDate.setDate(sDate.getDate() + (i * 7));
-          fetchedSchedules.push({
-            week_number: i,
-            scheduled_date: sDate.toISOString(),
-            amount: emiAmount,
-            penalty: 0
-          });
-        }
-      }
+      const fetchedSchedules = scheduleData || [];
 
       setLoan({
         ...loanData,

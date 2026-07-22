@@ -100,37 +100,11 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('collection_schedules')
         .select('scheduled_date, amount, week_number, scheduled_day')
-        .or(`loan_id.eq.${member.id},member_id.eq.${member.id}`)
+        .or(`loan_id.eq.${member.id},and(loan_id.is.null,member_id.eq.${member.id})`)
         .order('week_number', { ascending: true });
         
       if (error) throw error;
-      
-      // Standard EMI lookup based on database analysis
-      const SCHEME_STANDARDS = {
-        10000: { weeks: 12, emi: 1100 },
-        11000: { weeks: 15, emi: 1100 },
-        12000: { weeks: 16, emi: 1020 },
-        13000: { weeks: 18, emi: 990 },
-        15000: { weeks: 22, emi: 1100 },
-      };
-
-      let fetchedSchedules = data || [];
-      if (fetchedSchedules.length === 0) {
-        const scheme = SCHEME_STANDARDS[member.amount_sanctioned];
-        const totalWeeks = scheme ? scheme.weeks : 16;
-        const emiAmount = scheme ? scheme.emi : Math.round((member.amount_sanctioned || 0) / 16);
-        const baseDate = new Date(member.credited_at || member.created_at || new Date());
-        for (let i = 1; i <= totalWeeks; i++) {
-          const sDate = new Date(baseDate);
-          sDate.setDate(sDate.getDate() + (i * 7));
-          fetchedSchedules.push({
-            week_number: i,
-            scheduled_date: sDate.toISOString(),
-            amount: emiAmount,
-            scheduled_day: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][sDate.getDay()]
-          });
-        }
-      }
+      const fetchedSchedules = data || [];
       
       setMemberSchedules(fetchedSchedules);
       setMemberToPrint(member);

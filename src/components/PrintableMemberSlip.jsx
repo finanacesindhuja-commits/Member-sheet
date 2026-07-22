@@ -32,30 +32,50 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
   // Principal per week = Loan Amount ÷ Total Weeks (same for every week)
   const principalPerWeek = Math.floor(loanAmount / totalWeeks);
 
+  // Dynamic scaling classes based on number of weeks to prevent A4 print cutoff
+  const isCompact = totalWeeks > 12;
+  const isSuperCompact = totalWeeks > 16;
 
+  const containerPadding = isSuperCompact ? 'p-3' : 'p-4';
+  const rowHeight = isSuperCompact ? 'h-[23px]' : isCompact ? 'h-[27px]' : 'h-8';
+  const cellPadding = isSuperCompact ? 'py-[1px] px-1' : isCompact ? 'py-0.5 px-1.5' : 'py-1 px-2';
+  const tableFontSize = isSuperCompact ? 'text-[9.5px]' : isCompact ? 'text-[10.5px]' : 'text-[11px]';
+  const numberFontSize = isSuperCompact ? 'text-xs' : 'text-sm';
+  const emiFontSize = isSuperCompact ? 'text-xs' : 'text-sm';
+  
+  const headerSpacing = isSuperCompact ? 'pb-1 mb-1' : 'pb-2 mb-2';
+  const logoSize = isSuperCompact ? 'w-16 h-16' : 'w-20 h-20';
+  const infoGridMargin = isSuperCompact ? '-mt-5' : '-mt-4';
+  const infoGridPadding = isSuperCompact ? 'p-2 mb-1' : 'p-3 mb-2';
+  const infoGridGapY = isSuperCompact ? 'gap-y-1.5' : 'gap-y-3';
+  const infoGridFontSize = isSuperCompact ? 'text-[10px]' : 'text-[11px]';
+  const titleMargin = isSuperCompact ? 'mb-1.5' : 'mb-3';
+  const footerMargin = isSuperCompact ? 'mt-0.5 pt-0.5' : 'mt-1 pt-1';
+  const photoHeight = isSuperCompact ? 'w-24 h-28' : 'w-28 h-32';
+  const qrCodeSize = isSuperCompact ? 130 : isCompact ? 145 : 160;
 
   return (
-    <div className={`p-4 w-[210mm] mx-auto bg-white text-black font-sans box-border relative ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only h-[296mm] overflow-hidden'}`}>
+    <div className={`${containerPadding} w-[210mm] mx-auto bg-white text-black font-sans box-border relative ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only h-[296mm] overflow-hidden'}`}>
 
       {/* Header */}
-      <div className="flex flex-col items-center pb-2 mb-2 text-center relative">
-        {/* Logo - Top Left */}
-        <div className="absolute top-0 left-0">
-          <img src={logo} alt="Logo" className="w-20 h-20 object-contain" />
+      <div className={`flex items-center justify-center relative ${headerSpacing} min-h-[70px]`}>
+        {/* Logo - Left aligned, vertically centered */}
+        <div className="absolute left-0 top-1/2 -translate-y-1/2">
+          <img src={logo} alt="Logo" className={`${logoSize} object-contain`} />
         </div>
 
-        <div className="pt-2">
-          <h1 className="text-3xl font-black uppercase tracking-[0.2em] text-black">Sindhuja Finance</h1>
-          <p className="text-[10px] font-bold text-gray-700 uppercase leading-relaxed max-w-[600px] mt-1">
+        <div className="text-center px-20">
+          <h1 className={`${isSuperCompact ? 'text-2xl' : 'text-3xl'} font-black uppercase tracking-[0.2em] text-black`}>Sindhuja Finance</h1>
+          <p className={`${isSuperCompact ? 'text-[8.5px]' : 'text-[10px]'} font-bold text-gray-700 uppercase leading-relaxed max-w-[600px] mx-auto mt-0.5`}>
             NO-1/23,MAYILADUTHURAI ROAD, SENTHAMANGALAM,THIRUVARUR, 610001
           </p>
         </div>
       </div>
 
       {/* Member Info Grid */}
-      <div className="border-2 border-black p-3 mb-2 bg-gray-50/30 rounded-sm -mt-4">
+      <div className={`border-2 border-black bg-gray-50/30 rounded-sm ${infoGridPadding} ${infoGridMargin}`}>
         <div className="flex justify-between items-start gap-8">
-          <div className="flex-1 grid grid-cols-3 gap-x-6 gap-y-3 text-[11px]">
+          <div className={`flex-1 grid grid-cols-3 gap-x-6 ${infoGridGapY} ${infoGridFontSize}`}>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-800 uppercase text-[9px]">Member Name</span>
               <span className="font-black text-base">{member.member_name}</span>
@@ -98,7 +118,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
 
           {/* Photo Box & Signature */}
           <div className="flex flex-col items-center shrink-0">
-            <div className="w-28 h-32 border-2 border-black flex items-center justify-center bg-white overflow-hidden shadow-inner">
+            <div className={`${photoHeight} border-2 border-black flex items-center justify-center bg-white overflow-hidden shadow-inner`}>
               {member.member_photo_url ? (
                 <img src={member.member_photo_url} alt="Member" className="w-full h-full object-cover" />
               ) : (
@@ -113,19 +133,19 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
         </div>
       </div>
 
-      <h3 className="text-sm font-black text-black border-b-2 border-black inline-block mb-3 uppercase tracking-widest">Collection Schedule</h3>
+      <h3 className={`text-sm font-black text-black border-b-2 border-black inline-block uppercase tracking-widest ${titleMargin}`}>Collection Schedule</h3>
 
       {/* Collection Table */}
-      <table className="w-full border-collapse border-2 border-black text-[11px]">
+      <table className={`w-full border-collapse border-2 border-black ${tableFontSize}`}>
         <thead>
           <tr className="bg-gray-50">
-            <th className="border-2 border-black px-1 py-2 text-center w-10 uppercase">No</th>
-            <th className="border-2 border-black px-2 py-2 text-left w-24 uppercase">Date</th>
-            <th className="border-2 border-black px-2 py-2 text-right w-20 uppercase font-black">Principal</th>
-            <th className="border-2 border-black px-2 py-2 text-right w-20 uppercase font-black">Interest</th>
-            <th className="border-2 border-black px-2 py-2 text-right w-24 uppercase font-black">Total EMI</th>
-            <th className="border-2 border-black px-1 py-2 text-center w-20 uppercase">Sign</th>
-            <th className="border-2 border-black px-2 py-2 text-center uppercase">Remark</th>
+            <th className={`border-2 border-black text-center w-10 uppercase ${cellPadding}`}>No</th>
+            <th className={`border-2 border-black text-left w-24 uppercase ${cellPadding}`}>Date</th>
+            <th className={`border-2 border-black text-right w-20 uppercase font-black ${cellPadding}`}>Principal</th>
+            <th className={`border-2 border-black text-right w-20 uppercase font-black ${cellPadding}`}>Interest</th>
+            <th className={`border-2 border-black text-right w-24 uppercase font-black ${cellPadding}`}>Total EMI</th>
+            <th className={`border-2 border-black text-center w-20 uppercase ${cellPadding}`}>Sign</th>
+            <th className={`border-2 border-black text-center uppercase ${cellPadding}`}>Remark</th>
           </tr>
         </thead>
         <tbody>
@@ -142,24 +162,24 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             const interest = emiAmount ? (emiAmount - principalPerWeek) : null;
 
             return (
-              <tr key={index} className="h-8">
-                <td className="border-2 border-black px-1 py-1 text-center font-black text-sm">
+              <tr key={index} className={rowHeight}>
+                <td className={`border-2 border-black text-center font-black ${numberFontSize} ${cellPadding}`}>
                   {isSchedule ? (sch.week_number ?? index + 1) : index + 1}
                 </td>
-                <td className="border-2 border-black px-2 py-1 font-mono font-bold">
+                <td className={`border-2 border-black font-mono font-bold ${cellPadding}`}>
                   {isSchedule ? new Date(sch.scheduled_date).toLocaleDateString('en-GB') : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-bold text-black">
+                <td className={`border-2 border-black text-right font-bold text-black ${cellPadding}`}>
                   {principal ? `₹${principal.toLocaleString()}` : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-bold text-black">
+                <td className={`border-2 border-black text-right font-bold text-black ${cellPadding}`}>
                   {interest !== null ? (interest > 0 ? `₹${interest.toLocaleString()}` : '—') : ''}
                 </td>
-                <td className="border-2 border-black px-2 py-1 text-right font-black text-sm">
+                <td className={`border-2 border-black text-right font-black ${emiFontSize} ${cellPadding}`}>
                   {emiAmount ? `₹${emiAmount.toLocaleString()}` : ''}
                 </td>
-                <td className="border-2 border-black px-1 py-1"></td>
-                <td className="border-2 border-black px-2 py-1"></td>
+                <td className={`border-2 border-black ${cellPadding}`}></td>
+                <td className={`border-2 border-black ${cellPadding}`}></td>
               </tr>
             );
           })}
@@ -167,7 +187,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
       </table>
 
       {/* Footer / Terms */}
-      <div className="mt-1 pt-1 flex justify-between items-end gap-4 text-[8px]">
+      <div className={`flex justify-between items-end gap-4 text-[8px] ${footerMargin}`}>
         <div className="flex-1">
           <p className="font-black uppercase mb-0.5">General Instructions:</p>
           <ul className="list-disc ml-4 space-y-0.5">
@@ -184,7 +204,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
           <div className="border-2 border-black p-1 bg-white shadow-sm">
             <QRCodeSVG
               value={`${BASE_URL}/verify/${encodeURIComponent(member.member_no || member.id)}`}
-              size={160}
+              size={qrCodeSize}
               level="L"
               includeMargin={true}
             />
