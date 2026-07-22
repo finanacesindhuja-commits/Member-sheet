@@ -354,7 +354,8 @@ export default function Dashboard() {
                     return String(m.member_name || '').toLowerCase().includes(q) || 
                            String(m.member_no || '').toLowerCase().includes(q) || 
                            String(m.id || '').toLowerCase().includes(q) ||
-                           String(m.mobile_no || '').includes(q);
+                           String(m.mobile_no || '').includes(q) ||
+                           String(center.name || '').toLowerCase().includes(q);
                   })
                   .sort((a, b) => {
                     const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.credited_at ? new Date(a.credited_at).getTime() : 0);
