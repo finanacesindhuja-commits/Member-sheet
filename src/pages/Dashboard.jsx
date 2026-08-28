@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPrint, FaSignOutAlt, FaUsers, FaSearch } from 'react-icons/fa';
+import { FaPrint, FaSignOutAlt, FaUsers, FaSearch, FaTimes, FaBuilding } from 'react-icons/fa';
 import { supabase } from '../supabaseClient';
 import PrintableMemberSlip from '../components/PrintableMemberSlip';
 
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCenterId, setSelectedCenterId] = useState('ALL');
   const [activeView, setActiveView] = useState('recent');
   
   const staffId = sessionStorage.getItem('staffId');
@@ -220,6 +221,93 @@ export default function Dashboard() {
     );
   };
 
+  const getCenterSearchString = (c) => {
+    return [
+      c.name,
+      `${c.name || ''} Center`,
+      `Center ${c.name || ''}`,
+      c.center_name,
+      c.center_no,
+      `Center ${c.center_no || ''}`,
+      c.code,
+      c.area,
+      c.village,
+      c.place,
+      String(c.id || '')
+    ].filter(Boolean).join(' ').toLowerCase();
+  };
+
+  const getMemberSearchString = (m, center) => {
+    return [
+      m.member_name,
+      m.member_no,
+      String(m.id || ''),
+      String(m.mobile_no || ''),
+      String(m.nominee_mobile || ''),
+      String(m.amount_sanctioned || ''),
+      center?.name,
+      `${center?.name || ''} Center`,
+      center?.center_no,
+      center?.code
+    ].filter(Boolean).join(' ').toLowerCase();
+  };
+
+  const getFilteredCenterGroups = () => {
+    const rawQ = searchQuery.trim().toLowerCase();
+    const qTokens = rawQ ? rawQ.split(/[\s,/-]+/).filter(Boolean) : [];
+
+    return centers
+      .filter(center => {
+        if (selectedCenterId !== 'ALL' && String(center.id) !== String(selectedCenterId)) {
+          return false;
+        }
+        return true;
+      })
+      .map(center => {
+        const centerSearchText = getCenterSearchString(center);
+        // Center itself matches if all query tokens are found in center metadata
+        const isCenterMatch = qTokens.length > 0 && qTokens.every(token => centerSearchText.includes(token));
+
+        const centerMembers = members.filter(m => m.center_id === center.id);
+
+        const filteredMembers = isCenterMatch
+          ? centerMembers // If center itself matched, show all members in this center
+          : centerMembers.filter(m => {
+              if (qTokens.length === 0) return true;
+              const memText = getMemberSearchString(m, center);
+              return qTokens.every(token => memText.includes(token));
+            });
+
+        const sortedMembers = [...filteredMembers].sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.credited_at ? new Date(a.credited_at).getTime() : 0);
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.credited_at ? new Date(b.credited_at).getTime() : 0);
+          const validA = isNaN(dateA) ? 0 : dateA;
+          const validB = isNaN(dateB) ? 0 : dateB;
+          if (validA === validB) {
+            const noA = parseInt(String(a.member_no || '').replace(/\D/g, '')) || 0;
+            const noB = parseInt(String(b.member_no || '').replace(/\D/g, '')) || 0;
+            return noB - noA;
+          }
+          return validB - validA;
+        });
+
+        return {
+          center,
+          members: sortedMembers,
+          isCenterMatch,
+          totalCenterMembers: centerMembers.length
+        };
+      })
+      .filter(group => {
+        // If there's an active search or specific center filter selected:
+        if (qTokens.length > 0 || selectedCenterId !== 'ALL') {
+          return group.members.length > 0 || group.isCenterMatch;
+        }
+        // If viewing all with no search: show centers that have members
+        return group.members.length > 0;
+      });
+  };
+
   const getRecentMembers = () => {
     const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
     return members.filter(member => {
@@ -241,6 +329,9 @@ export default function Dashboard() {
   };
 
   const recentMembers = getRecentMembers();
+  const filteredCenterGroups = getFilteredCenterGroups();
+  const totalFilteredMembers = filteredCenterGroups.reduce((acc, g) => acc + g.members.length, 0);
+  const isSearchOrFilterActive = Boolean(searchQuery.trim() || selectedCenterId !== 'ALL');
 
   return (
     <>
@@ -257,14 +348,14 @@ export default function Dashboard() {
               
               <div className="space-y-2">
                 <button 
-                  onClick={() => { setActiveView('recent'); setSearchQuery(''); }}
-                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center gap-3 ${activeView === 'recent' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                  onClick={() => { setActiveView('recent'); setSearchQuery(''); setSelectedCenterId('ALL'); }}
+                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center gap-3 ${activeView === 'recent' && !isSearchOrFilterActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                 >
                   <FaUsers size={16} /> Recent
                 </button>
                 <button 
-                  onClick={() => setActiveView('all')}
-                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center gap-3 ${activeView === 'all' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                  onClick={() => { setActiveView('all'); setSelectedCenterId('ALL'); }}
+                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center gap-3 ${activeView === 'all' && !isSearchOrFilterActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                 >
                   <FaUsers size={16} /> All Members
                 </button>
@@ -280,22 +371,84 @@ export default function Dashboard() {
 
           {/* Main Content */}
           <div className="flex-1 min-w-0">
-            {/* Header / Search */}
-            <div className="bg-slate-900 border border-white/10 rounded-3xl p-4 mb-8 flex justify-end shadow-2xl">
+            {/* Header / Search & Center Filter */}
+            <div className="bg-slate-900 border border-white/10 rounded-3xl p-4 mb-6 flex flex-col md:flex-row gap-4 justify-between items-center shadow-2xl">
+              {/* Center Quick Filter Dropdown */}
+              <div className="w-full md:w-72 relative">
+                <FaBuilding className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <select 
+                  value={selectedCenterId}
+                  onChange={(e) => {
+                    setSelectedCenterId(e.target.value);
+                    if (activeView === 'recent') setActiveView('all');
+                  }}
+                  className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-11 pr-8 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm font-bold appearance-none cursor-pointer"
+                >
+                  <option value="ALL">All Centers ({centers.length})</option>
+                  {centers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} Center {c.center_no ? `(${c.center_no})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">
+                  ▼
+                </div>
+              </div>
+
+              {/* Search Bar */}
               <div className="relative w-full md:w-96">
                 <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input 
                   type="text" 
-                  placeholder="Search members..." 
+                  placeholder="Search center, member name, ID, phone..." 
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
-                    if (e.target.value) setActiveView('all');
+                    if (e.target.value && activeView === 'recent') {
+                      setActiveView('all');
+                    }
                   }}
-                  className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm font-bold placeholder:text-slate-600"
+                  className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-12 pr-10 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm font-bold placeholder:text-slate-600"
                 />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                    title="Clear Search"
+                  >
+                    <FaTimes size={14} />
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Active Search / Filter Status Banner */}
+            {isSearchOrFilterActive && (
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 bg-blue-950/40 border border-blue-500/30 rounded-2xl px-5 py-3 text-sm">
+                <div className="flex items-center gap-2 text-blue-300 font-medium">
+                  <span>Found</span>
+                  <span className="font-black text-white bg-blue-500/20 px-2.5 py-0.5 rounded-lg border border-blue-500/40">
+                    {totalFilteredMembers} {totalFilteredMembers === 1 ? 'member' : 'members'}
+                  </span>
+                  <span>in</span>
+                  <span className="font-black text-white bg-blue-500/20 px-2.5 py-0.5 rounded-lg border border-blue-500/40">
+                    {filteredCenterGroups.length} {filteredCenterGroups.length === 1 ? 'center' : 'centers'}
+                  </span>
+                  {searchQuery && (
+                    <span className="text-slate-300">
+                      for "<span className="text-blue-400 font-bold">{searchQuery}</span>"
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setSearchQuery(''); setSelectedCenterId('ALL'); }}
+                  className="text-xs text-blue-400 hover:text-blue-200 font-bold uppercase tracking-wider underline cursor-pointer"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            )}
 
             {/* Members List Grouped by Center */}
             {loading ? (
@@ -303,40 +456,40 @@ export default function Dashboard() {
             ) : centers.length > 0 ? (
               <div className="space-y-8">
                 
-                {/* Recently Added Section */}
-                {activeView === 'recent' && !searchQuery ? (
+                {/* Recently Added Section (only when on recent view and no active search/filter) */}
+                {activeView === 'recent' && !isSearchOrFilterActive ? (
                   recentMembers.length > 0 ? (
                     <div className="mb-8 space-y-4">
-                  <div className="bg-green-900/20 border border-green-500/30 rounded-2xl p-4 flex justify-between items-center shadow-lg shadow-green-900/10">
-                    <h2 className="text-xl font-bold text-green-400 tracking-tight flex items-center gap-2">
-                      <span className="w-2 h-8 bg-green-400 rounded-full"></span>
-                      Recently Added
-                    </h2>
-                    <span className="bg-green-500/20 text-green-300 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-green-500/30">
-                      {recentMembers.length} Total New
-                    </span>
-                  </div>
-                  
-                  {centers.map(center => {
-                    const centerRecent = recentMembers.filter(m => m.center_id === center.id);
-                    if (centerRecent.length === 0) return null;
-                    return (
-                      <div key={`recent-${center.id}`} className="bg-green-900/10 border border-green-500/20 rounded-3xl overflow-hidden shadow-xl shadow-green-900/5">
-                        <div className="p-4 border-b border-green-500/10 bg-green-800/20 flex justify-between items-center">
-                          <h3 className="text-md font-bold text-green-300 tracking-tight flex items-center gap-2">
-                            {center.name} Center
-                          </h3>
-                          <span className="bg-green-500/10 text-green-400 text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-widest border border-green-500/20">
-                            {centerRecent.length} Members
-                          </span>
-                        </div>
-                        <div className="divide-y divide-green-500/10">
-                          {centerRecent.map(member => renderMemberRow(member))}
-                        </div>
+                      <div className="bg-green-900/20 border border-green-500/30 rounded-2xl p-4 flex justify-between items-center shadow-lg shadow-green-900/10">
+                        <h2 className="text-xl font-bold text-green-400 tracking-tight flex items-center gap-2">
+                          <span className="w-2 h-8 bg-green-400 rounded-full"></span>
+                          Recently Added
+                        </h2>
+                        <span className="bg-green-500/20 text-green-300 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-green-500/30">
+                          {recentMembers.length} Total New
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      
+                      {centers.map(center => {
+                        const centerRecent = recentMembers.filter(m => m.center_id === center.id);
+                        if (centerRecent.length === 0) return null;
+                        return (
+                          <div key={`recent-${center.id}`} className="bg-green-900/10 border border-green-500/20 rounded-3xl overflow-hidden shadow-xl shadow-green-900/5">
+                            <div className="p-4 border-b border-green-500/10 bg-green-800/20 flex justify-between items-center">
+                              <h3 className="text-md font-bold text-green-300 tracking-tight flex items-center gap-2">
+                                {center.name} Center
+                              </h3>
+                              <span className="bg-green-500/10 text-green-400 text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-widest border border-green-500/20">
+                                {centerRecent.length} Members
+                              </span>
+                            </div>
+                            <div className="divide-y divide-green-500/10">
+                              {centerRecent.map(member => renderMemberRow(member))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <div className="p-12 text-center text-slate-500 font-bold italic bg-slate-900 rounded-3xl border border-white/10">
                       No recently added members found.
@@ -344,60 +497,62 @@ export default function Dashboard() {
                   )
                 ) : null}
 
-              {/* Members List Grouped by Center */}
-              {(activeView === 'all' || searchQuery) && centers.map(center => {
-                const centerMembers = members
-                  .filter(m => m.center_id === center.id)
-                  .filter(m => {
-                    if (!searchQuery) return true;
-                    const q = String(searchQuery).toLowerCase();
-                    return String(m.member_name || '').toLowerCase().includes(q) || 
-                           String(m.member_no || '').toLowerCase().includes(q) || 
-                           String(m.id || '').toLowerCase().includes(q) ||
-                           String(m.mobile_no || '').includes(q) ||
-                           String(center.name || '').toLowerCase().includes(q);
-                  })
-                  .sort((a, b) => {
-                    const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.credited_at ? new Date(a.credited_at).getTime() : 0);
-                    const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.credited_at ? new Date(b.credited_at).getTime() : 0);
-                    const validA = isNaN(dateA) ? 0 : dateA;
-                    const validB = isNaN(dateB) ? 0 : dateB;
-                    
-                    // If dates are identical or both missing (e.g. bulk import)
-                    if (validA === validB) {
-                      const noA = parseInt(String(a.member_no || '').replace(/\D/g, '')) || 0;
-                      const noB = parseInt(String(b.member_no || '').replace(/\D/g, '')) || 0;
-                      return noB - noA;
-                    }
-                    return validB - validA;
-                  });
-
-                if (centerMembers.length === 0) return null;
-
-                return (
-                  <div key={center.id} className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
-                    <div className="p-6 border-b border-white/10 bg-slate-800/50 flex justify-between items-center">
-                      <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                        <span className="w-2 h-8 bg-blue-500 rounded-full"></span>
-                        {center.name} Center
-                      </h2>
-                      <span className="bg-blue-500/10 text-blue-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-500/20">
-                        {centerMembers.length} Members
-                      </span>
+                {/* All Members / Filtered Centers List */}
+                {(activeView === 'all' || isSearchOrFilterActive) && (
+                  filteredCenterGroups.length > 0 ? (
+                    filteredCenterGroups.map(({ center, members: centerMembers, isCenterMatch }) => (
+                      <div key={center.id} className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+                        <div className="p-6 border-b border-white/10 bg-slate-800/50 flex justify-between items-center">
+                          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                            <span className="w-2 h-8 bg-blue-500 rounded-full"></span>
+                            {center.name} Center
+                            {isCenterMatch && (
+                              <span className="ml-2 bg-blue-500/20 text-blue-300 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider border border-blue-500/30">
+                                Center Match
+                              </span>
+                            )}
+                          </h2>
+                          <span className="bg-blue-500/10 text-blue-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-500/20">
+                            {centerMembers.length} {centerMembers.length === 1 ? 'Member' : 'Members'}
+                          </span>
+                        </div>
+                        {centerMembers.length > 0 ? (
+                          <div className="divide-y divide-white/10">
+                            {centerMembers.map(member => renderMemberRow(member))}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center text-slate-500 font-medium italic">
+                            No active or disbursed members found in this center.
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-slate-900 border border-white/10 rounded-3xl p-12 text-center shadow-2xl">
+                      <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-500 border border-white/5">
+                        <FaSearch size={24} />
+                      </div>
+                      <h3 className="text-lg font-bold text-white mb-2">No Matching Results</h3>
+                      <p className="text-slate-400 text-sm mb-6 max-w-md mx-auto">
+                        {isSearchOrFilterActive ? (
+                          <>No centers or members matched your search <span className="text-blue-400 font-bold">{searchQuery ? `"${searchQuery}"` : ''}</span>. Try searching by center name, center number, member name, or mobile number.</>
+                        ) : (
+                          <>No members found in any of your centers.</>
+                        )}
+                      </p>
+                      {isSearchOrFilterActive && (
+                        <button 
+                          onClick={() => { setSearchQuery(''); setSelectedCenterId('ALL'); }}
+                          className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 cursor-pointer"
+                        >
+                          Clear Search & Filters
+                        </button>
+                      )}
                     </div>
-                    <div className="divide-y divide-white/10">
-                      {centerMembers.map(member => renderMemberRow(member))}
-                    </div>
-                  </div>
-                );
-              })}
-              {members.length === 0 && (
-                <div className="p-12 text-center text-slate-500 font-bold italic bg-slate-900 rounded-3xl border border-white/10">
-                  No members found in any of your centers.
-                </div>
-              )}
-            </div>
-          ) : null}
+                  )
+                )}
+              </div>
+            ) : null}
           </div> {/* End Main Content */}
         </div>
       </div>
