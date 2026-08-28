@@ -13,6 +13,16 @@ export default function LoanVerify() {
     fetchLoanDetails();
   }, [loanId]);
 
+  const calculatePenalty = (scheduledDate, scheduleStatus) => {
+    const cleanStatus = scheduleStatus ? String(scheduleStatus).trim() : '';
+    if (['Paid', 'Verified', 'Received'].includes(cleanStatus)) return 0;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayObj = new Date(todayStr);
+    const schedObj = new Date(scheduledDate);
+    const diffDays = Math.floor((todayObj - schedObj) / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays * 20 : 0;
+  };
+
   const fetchLoanDetails = async () => {
     try {
       setError(null);
@@ -20,53 +30,98 @@ export default function LoanVerify() {
 
       let loanData = null;
       let loanError = null;
+      const cleanId = (loanId || '').trim();
 
       // 1. First try treating loanId as a member_no
-      const { data: memberData, error: memberError } = await supabase
+      const { data: memberData } = await supabase
         .from('members')
-        .select('id')
-        .ilike('member_no', loanId.trim())
+        .select('id, member_no')
+        .ilike('member_no', cleanId)
         .maybeSingle();
 
       if (memberData) {
-        const { data, error } = await supabase
+        // Look for active/disbursed loan first
+        let { data, error } = await supabase
           .from('loans')
           .select(LOAN_SELECT)
           .eq('member_id', memberData.id)
+          .not('credited_at', 'is', null)
           .order('credited_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        if (!data) {
+          const res = await supabase
+            .from('loans')
+            .select(LOAN_SELECT)
+            .eq('member_id', memberData.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          data = res.data;
+          error = res.error;
+        }
+
         loanData = data;
         loanError = error;
       }
 
-      // 2. If not found by member_no, try integer ID (Old Slips)
-      if (!loanData && !isNaN(loanId.trim()) && loanId.trim() !== '') {
-        const numericId = parseInt(loanId.trim(), 10);
-        const { data, error } = await supabase
+      // 2. If not found by member_no, try integer ID (direct loan id first)
+      if (!loanData && !isNaN(cleanId) && cleanId !== '') {
+        const numericId = parseInt(cleanId, 10);
+        // Try direct loan id
+        let { data, error } = await supabase
           .from('loans')
           .select(LOAN_SELECT)
-          .or(`id.eq.${numericId},member_id.eq.${numericId}`)
-          .order('credited_at', { ascending: false })
-          .limit(1)
+          .eq('id', numericId)
           .maybeSingle();
+
+        if (!data) {
+          // Try member_id with latest disbursed loan
+          const res = await supabase
+            .from('loans')
+            .select(LOAN_SELECT)
+            .eq('member_id', numericId)
+            .not('credited_at', 'is', null)
+            .order('credited_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          data = res.data;
+          error = res.error;
+        }
+
         loanData = data;
         loanError = error || loanError;
       }
 
-      // 3. If still not found, try UUID (Just in case)
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(loanId.trim());
+      // 3. If still not found, try UUID
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanId);
       if (!loanData && isUUID) {
         const { data, error } = await supabase
           .from('loans')
           .select(LOAN_SELECT)
-          .or(`id.eq.${loanId.trim()},member_id.eq.${loanId.trim()}`)
+          .or(`id.eq.${cleanId},member_id.eq.${cleanId}`)
           .maybeSingle();
         loanData = data;
         loanError = error || loanError;
       }
 
-      if (loanError) {
+      // 4. If still not found, try search by member_name
+      if (!loanData) {
+        const { data, error } = await supabase
+          .from('loans')
+          .select(LOAN_SELECT)
+          .ilike('member_name', cleanId)
+          .order('credited_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) {
+          loanData = data;
+          loanError = error;
+        }
+      }
+
+      if (loanError && !loanData) {
         console.error('Loan Fetch Error:', loanError);
         setError(`${loanError.message} (${loanError.code})`);
         return;
@@ -79,20 +134,21 @@ export default function LoanVerify() {
 
       let memberNo = 'N/A';
       if (loanData.member_id) {
-        const { data: memberData, error: memberError } = await supabase
+        const { data: memberData } = await supabase
           .from('members')
           .select('member_no')
           .eq('id', loanData.member_id)
           .maybeSingle();
 
-        if (!memberError && memberData) {
+        if (memberData?.member_no) {
           memberNo = memberData.member_no;
         }
       }
 
-      const { data: scheduleData, error: schError } = await supabase
+      // Fetch schedules without 'penalty' column (penalty is calculated dynamically)
+      let { data: scheduleData, error: schError } = await supabase
         .from('collection_schedules')
-        .select('week_number, scheduled_date, amount, penalty')
+        .select('id, week_number, scheduled_date, amount, status, collected_amount, scheduled_day')
         .or(`loan_id.eq.${loanData.id},and(loan_id.is.null,member_id.eq.${loanData.id})`)
         .order('week_number', { ascending: true });
 
@@ -100,7 +156,44 @@ export default function LoanVerify() {
         console.error('Schedule Fetch Error:', schError);
       }
 
-      const fetchedSchedules = scheduleData || [];
+      // Fallback: If 0 schedules found by id, try member_name
+      if ((!scheduleData || scheduleData.length === 0) && loanData.member_name) {
+        const { data: nameSchedules } = await supabase
+          .from('collection_schedules')
+          .select('id, week_number, scheduled_date, amount, status, collected_amount, scheduled_day')
+          .ilike('member_name', loanData.member_name.trim())
+          .order('week_number', { ascending: true });
+
+        if (nameSchedules && nameSchedules.length > 0) {
+          scheduleData = nameSchedules;
+        }
+      }
+
+      // Fallback 2: Generate virtual schedules if database has none
+      let fetchedSchedules = scheduleData || [];
+      if (fetchedSchedules.length === 0 && loanData.amount_sanctioned) {
+        const loanAmt = Number(loanData.amount_sanctioned) || 10000;
+        const SCHEME_STANDARDS = {
+          10000: { weeks: 12, emi: 1100 },
+          11000: { weeks: 15, emi: 1100 },
+          12000: { weeks: 16, emi: 1020 },
+          13000: { weeks: 18, emi: 990 },
+          15000: { weeks: 22, emi: 1000 },
+        };
+        const standard = SCHEME_STANDARDS[loanAmt] || { weeks: 16, emi: Math.round(loanAmt / 16) };
+        const baseDate = loanData.credited_at ? new Date(loanData.credited_at) : new Date();
+
+        fetchedSchedules = Array.from({ length: standard.weeks }, (_, i) => {
+          const d = new Date(baseDate);
+          d.setDate(d.getDate() + (i + 1) * 7);
+          return {
+            week_number: i + 1,
+            scheduled_date: d.toISOString().split('T')[0],
+            amount: standard.emi,
+            status: 'Approved'
+          };
+        });
+      }
 
       setLoan({
         ...loanData,
@@ -145,43 +238,56 @@ export default function LoanVerify() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Find "this week" schedule: the schedule whose date is within the current week
-  // (from Monday to Sunday of this week), or the closest upcoming one
+  // Accurate Monday to Sunday calculation
+  const dayOfWeek = today.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+  startOfWeek.setDate(today.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
 
   const startOfNextWeek = new Date(endOfWeek);
   startOfNextWeek.setDate(endOfWeek.getDate() + 1);
+  startOfNextWeek.setHours(0, 0, 0, 0);
+
   const endOfNextWeek = new Date(startOfNextWeek);
   endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+  endOfNextWeek.setHours(23, 59, 59, 999);
 
-  // This week: schedule falling in current Mon-Sun range
+  // 1. First priority: Schedule falling in the current week (Mon-Sun)
   let thisWeekSchedule = schedules.find(s => {
     const d = new Date(s.scheduled_date);
-    d.setHours(0, 0, 0, 0);
     return d >= startOfWeek && d <= endOfWeek;
   });
 
-  // If no schedule this week, find the closest upcoming schedule
+  // 2. Second priority: If not in current week, look for the first pending/unpaid installment
   if (!thisWeekSchedule) {
-    const upcoming = schedules.filter(s => new Date(s.scheduled_date) >= today);
-    if (upcoming.length > 0) {
-      thisWeekSchedule = upcoming.reduce((closest, s) =>
-        new Date(s.scheduled_date) < new Date(closest.scheduled_date) ? s : closest
-      );
+    const unpaid = schedules.filter(s => !['Paid', 'Received', 'Verified'].includes(s.status));
+    if (unpaid.length > 0) {
+      thisWeekSchedule = unpaid[0];
+    } else {
+      // 3. Third priority: Next closest upcoming schedule
+      const upcoming = schedules.filter(s => new Date(s.scheduled_date) >= today);
+      if (upcoming.length > 0) {
+        thisWeekSchedule = upcoming.reduce((closest, s) =>
+          new Date(s.scheduled_date) < new Date(closest.scheduled_date) ? s : closest
+        );
+      } else if (schedules.length > 0) {
+        thisWeekSchedule = schedules[schedules.length - 1];
+      }
     }
   }
 
-  // Next week: schedule falling in next Mon-Sun range
+  // Next week schedule
   let nextWeekSchedule = schedules.find(s => {
     const d = new Date(s.scheduled_date);
-    d.setHours(0, 0, 0, 0);
     return d >= startOfNextWeek && d <= endOfNextWeek;
   });
 
-  // If no schedule next week but we have this week, use week_number + 1
+  // If no schedule next week by date range, pick the installment following this week's installment
   if (!nextWeekSchedule && thisWeekSchedule) {
     nextWeekSchedule = schedules.find(s => s.week_number === (thisWeekSchedule.week_number + 1));
   }
@@ -195,7 +301,7 @@ export default function LoanVerify() {
   const nextDate = nextWeekSchedule?.scheduled_date
     ? new Date(nextWeekSchedule.scheduled_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : null;
-  const totalPenalty = schedules.reduce((sum, s) => sum + (Number(s.penalty) || 0), 0);
+  const totalPenalty = schedules.reduce((sum, s) => sum + calculatePenalty(s.scheduled_date, s.status), 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center p-4 font-sans pb-10">
