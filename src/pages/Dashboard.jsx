@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FaPrint, FaSignOutAlt, FaUsers, FaSearch, FaTimes, FaBuilding, 
-  FaSyncAlt, FaTrash, FaHistory 
+  FaSyncAlt, FaTrash, FaHistory, FaStar, FaCalendarAlt 
 } from 'react-icons/fa';
 import { supabase } from '../supabaseClient';
 import PrintableMemberSlip from '../components/PrintableMemberSlip';
@@ -29,10 +29,17 @@ export default function Dashboard() {
     fetchCenters();
   }, []);
 
-  // Real-time subscription to listen for new loans
+  // Real-time subscription to listen for new centers AND new loans
   useEffect(() => {
     const channel = supabase
       .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'centers' },
+        () => {
+          fetchCenters();
+        }
+      )
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'loans' },
@@ -406,7 +413,22 @@ export default function Dashboard() {
     });
   };
 
+  // Sort centers for Recent view: most recently created centers first!
+  const getRecentCenters = () => {
+    return [...centers].sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      const validA = isNaN(dateA) ? 0 : dateA;
+      const validB = isNaN(dateB) ? 0 : dateB;
+      if (validA === validB) {
+        return (b.id || 0) - (a.id || 0); // Higher ID = newer center
+      }
+      return validB - validA;
+    });
+  };
+
   const recentMembers = getRecentMembers();
+  const recentCenters = getRecentCenters();
   const filteredCenterGroups = getFilteredCenterGroups();
   const totalFilteredMembers = filteredCenterGroups.reduce((acc, g) => acc + g.members.length, 0);
   const isSearchOrFilterActive = Boolean(searchQuery.trim() || selectedCenterId !== 'ALL');
@@ -419,6 +441,16 @@ export default function Dashboard() {
     const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
     return !m._printed && !printedIds.includes(m.id) && m.status !== 'ARCHIVED';
   }).length;
+
+  // Check if a center is newly created (e.g. within 30 days or top 5 newest)
+  const isCenterRecentlyCreated = (center, index) => {
+    if (index < 3) return true; // Top 3 newest centers always marked new
+    if (center.created_at) {
+      const cDate = new Date(center.created_at);
+      return !isNaN(cDate) && cDate > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
+    return false;
+  };
 
   return (
     <>
@@ -483,7 +515,7 @@ export default function Dashboard() {
           <div className="flex-1 min-w-0">
             {/* Header / Search & Center Filter */}
             <div className="bg-slate-900 border border-white/10 rounded-3xl p-4 mb-6 flex flex-col md:flex-row gap-4 justify-between items-center shadow-2xl">
-              {/* Center Quick Filter Dropdown */}
+              {/* Center Quick Filter Dropdown (Newest Centers Tagged) */}
               <div className="w-full md:w-72 relative">
                 <FaBuilding className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <select 
@@ -495,11 +527,14 @@ export default function Dashboard() {
                   className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-11 pr-8 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm font-bold appearance-none cursor-pointer"
                 >
                   <option value="ALL">All Centers ({centers.length})</option>
-                  {centers.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} Center {c.center_no ? `(${c.center_no})` : ''}
-                    </option>
-                  ))}
+                  {recentCenters.map((c, idx) => {
+                    const isNew = isCenterRecentlyCreated(c, idx);
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.center_no ? `(${c.center_no})` : ''} {isNew ? '✨ [NEW]' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">
                   ▼
@@ -564,7 +599,7 @@ export default function Dashboard() {
             {loading ? (
                <div className="text-center text-white py-16 font-bold uppercase tracking-widest animate-pulse flex flex-col items-center gap-4">
                  <FaSyncAlt className="animate-spin text-blue-500" size={28} />
-                 <span>Loading members...</span>
+                 <span>Loading centers & members...</span>
                </div>
             ) : centers.length > 0 ? (
               <div className="space-y-8">
@@ -576,10 +611,10 @@ export default function Dashboard() {
                       <div>
                         <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
                           <span className="w-2.5 h-8 bg-green-500 rounded-full"></span>
-                          Recently Added Members
+                          Recently Added Centers & Members
                         </h2>
                         <p className="text-slate-400 text-xs mt-1">
-                          Showing latest added loans and active members
+                          Showing newest centers first with latest member loan slips
                         </p>
                       </div>
 
@@ -616,33 +651,67 @@ export default function Dashboard() {
                       </div>
                     </div>
                     
-                    {recentMembers.length > 0 ? (
-                      centers.map(center => {
-                        const centerRecent = recentMembers.filter(m => m.center_id === center.id);
-                        if (centerRecent.length === 0) return null;
-                        return (
-                          <div key={`recent-${center.id}`} className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
-                            <div className="p-4 border-b border-white/10 bg-slate-800/50 flex justify-between items-center">
-                              <h3 className="text-md font-bold text-white tracking-tight flex items-center gap-2">
-                                <span className="w-2 h-5 bg-green-500 rounded-full"></span>
-                                {center.name} Center
-                              </h3>
-                              <span className="bg-green-500/10 text-green-400 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border border-green-500/20">
-                                {centerRecent.length} {centerRecent.length === 1 ? 'Member' : 'Members'}
-                              </span>
+                    {/* Render Centers in Recent order (Newest centers first) */}
+                    {recentCenters.map((center, idx) => {
+                      const centerRecent = recentMembers.filter(m => m.center_id === center.id);
+                      const isNewCenter = isCenterRecentlyCreated(center, idx);
+                      
+                      // If it has no recent members AND it's not a newly created center, skip it in Recent view
+                      if (centerRecent.length === 0 && !isNewCenter) return null;
+
+                      return (
+                        <div 
+                          key={`recent-${center.id}`} 
+                          className={`bg-slate-900 border rounded-3xl overflow-hidden shadow-2xl transition-all ${
+                            isNewCenter ? 'border-green-500/40 shadow-green-950/20' : 'border-white/10'
+                          }`}
+                        >
+                          <div className={`p-4 border-b flex flex-wrap justify-between items-center gap-2 ${
+                            isNewCenter ? 'bg-green-950/20 border-green-500/20' : 'bg-slate-800/50 border-white/10'
+                          }`}>
+                            <div className="flex items-center gap-3">
+                              <span className={`w-2.5 h-6 rounded-full ${isNewCenter ? 'bg-green-400' : 'bg-blue-500'}`}></span>
+                              <div>
+                                <h3 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+                                  {center.name} Center
+                                  {center.center_no && (
+                                    <span className="text-xs text-slate-400 font-mono font-bold">({center.center_no})</span>
+                                  )}
+                                  {isNewCenter && (
+                                    <span className="bg-green-500 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest shadow-md shadow-green-500/30 flex items-center gap-1">
+                                      ✨ NEW CENTER
+                                    </span>
+                                  )}
+                                </h3>
+                                {center.created_at && (
+                                  <p className="text-[10px] text-slate-400 font-medium">
+                                    Added on {new Date(center.created_at).toLocaleDateString()}
+                                  </p>
+                                )}
+                              </div>
                             </div>
+
+                            <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border ${
+                              centerRecent.length > 0 
+                                ? 'bg-green-500/10 text-green-400 border-green-500/20' 
+                                : 'bg-slate-800 text-slate-400 border-white/5'
+                            }`}>
+                              {centerRecent.length} {centerRecent.length === 1 ? 'Member' : 'Members'}
+                            </span>
+                          </div>
+
+                          {centerRecent.length > 0 ? (
                             <div className="divide-y divide-white/5">
                               {centerRecent.map(member => renderMemberRow(member))}
                             </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="p-12 text-center text-slate-500 font-bold italic bg-slate-900 rounded-3xl border border-white/10 flex flex-col items-center gap-3">
-                        <FaUsers size={32} className="text-slate-600" />
-                        <span>No recently added members found matching "{recentFilter}".</span>
-                      </div>
-                    )}
+                          ) : (
+                            <div className="p-6 text-center text-slate-500 text-xs font-medium italic bg-slate-950/40">
+                              ✨ New center created — Waiting for loan applications to be disbursed.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
 
@@ -655,6 +724,9 @@ export default function Dashboard() {
                           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                             <span className="w-2 h-8 bg-blue-500 rounded-full"></span>
                             {center.name} Center
+                            {center.center_no && (
+                              <span className="text-xs text-slate-400 font-mono font-bold">({center.center_no})</span>
+                            )}
                             {isCenterMatch && (
                               <span className="ml-2 bg-blue-500/20 text-blue-300 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider border border-blue-500/30">
                                 Center Match
