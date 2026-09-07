@@ -1,20 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPrint, FaSignOutAlt, FaUsers, FaSearch, FaTimes, FaBuilding } from 'react-icons/fa';
+import { 
+  FaPrint, FaSignOutAlt, FaUsers, FaSearch, FaTimes, FaBuilding, 
+  FaPlus, FaSyncAlt, FaCheckCircle, FaCheck, FaTrash, FaUserPlus, FaHistory 
+} from 'react-icons/fa';
 import { supabase } from '../supabaseClient';
 import PrintableMemberSlip from '../components/PrintableMemberSlip';
+
+const SCHEME_STANDARDS = {
+  10000: { weeks: 12, emi: 1100, name: '₹10,000 (12-Week Plan)' },
+  11000: { weeks: 15, emi: 1100, name: '₹11,000 (15-Week Plan)' },
+  12000: { weeks: 16, emi: 1020, name: '₹12,000 (16-Week Plan)' },
+  13000: { weeks: 18, emi: 990,  name: '₹13,000 (18-Week Plan)' },
+  15000: { weeks: 22, emi: 1100, name: '₹15,000 (22-Week Plan)' },
+};
 
 export default function Dashboard() {
   const [centers, setCenters] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [memberToPrint, setMemberToPrint] = useState(null);
   const [memberSchedules, setMemberSchedules] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCenterId, setSelectedCenterId] = useState('ALL');
-  const [activeView, setActiveView] = useState('recent');
+  const [activeView, setActiveView] = useState('recent'); // 'recent' | 'all'
+  const [recentFilter, setRecentFilter] = useState('all'); // 'all' | 'new' | 'printed'
+  const [justAddedLoanId, setJustAddedLoanId] = useState(null);
+
+  // Add Member Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState('');
+  const [newMemberForm, setNewMemberForm] = useState({
+    center_id: '',
+    member_name: '',
+    mobile_no: '',
+    nominee_mobile: '',
+    amount_sanctioned: 10000,
+    member_no: ''
+  });
   
   const staffId = sessionStorage.getItem('staffId');
   const staffName = sessionStorage.getItem('staffName');
@@ -24,7 +52,38 @@ export default function Dashboard() {
     fetchCenters();
   }, []);
 
-  const fetchCenters = async () => {
+  // Real-time subscription to listen for new loans
+  useEffect(() => {
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'loans' },
+        (payload) => {
+          if (payload.new) {
+            const newLoan = payload.new;
+            setMembers(prev => {
+              const exists = prev.some(m => m.id === newLoan.id);
+              if (exists) return prev;
+              const formatted = {
+                ...newLoan,
+                amount_sanctioned: Number(newLoan.amount_sanctioned) || 0,
+                _isNew: true
+              };
+              return [formatted, ...prev];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [centers]);
+
+  const fetchCenters = async (isManualRefresh = false) => {
+    if (isManualRefresh) setRefreshing(true);
     try {
       const { data: staffCenters, error } = await supabase
         .from('centers')
@@ -36,12 +95,13 @@ export default function Dashboard() {
       const fetchedCenters = staffCenters || [];
       setCenters(fetchedCenters);
       
-      // Automatically fetch all members for all centers
       if (fetchedCenters.length > 0) {
-        fetchAllMembers(fetchedCenters);
+        await fetchAllMembers(fetchedCenters);
       }
     } catch (err) {
       console.error('Error fetching centers:', err);
+    } finally {
+      if (isManualRefresh) setRefreshing(false);
     }
   };
 
@@ -50,12 +110,13 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const centerIds = centerList.map(c => c.id);
+      
+      // Fetch all loans belonging to the staff's centers
       const { data: membersData, error: memError } = await supabase
         .from('loans')
-        .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, members(member_no)')
+        .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, scheme_name, members(member_no)')
         .in('center_id', centerIds)
-        .in('status', ['DISBURSED', 'ARCHIVED'])
-        .order('member_name', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (memError) throw memError;
 
@@ -90,7 +151,7 @@ export default function Dashboard() {
       alert('Member marked as deleted.');
     } catch (err) {
       console.error('Error archiving member:', err);
-      alert('Failed to hide member.');
+      alert('Failed to delete member.');
     }
   };
 
@@ -111,7 +172,7 @@ export default function Dashboard() {
       setMemberToPrint(member);
       setShowPreview(true);
 
-      // Mark as viewed so it disappears from "Recently Added"
+      // Record printed status in localStorage
       const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
       if (!printedIds.includes(member.id)) {
         printedIds.push(member.id);
@@ -145,15 +206,182 @@ export default function Dashboard() {
     navigate('/login');
   };
 
+  const handleResetPrintHistory = () => {
+    if (window.confirm('Reset viewed/printed history? All recently added members will show with the "NEW" badge again.')) {
+      localStorage.removeItem('printed_loans');
+      setMembers(prev => prev.map(m => ({ ...m, _printed: false })));
+    }
+  };
+
+  const handleOpenAddModal = (defaultCenterId = null) => {
+    const targetCenterId = defaultCenterId || (selectedCenterId !== 'ALL' ? selectedCenterId : (centers[0]?.id || ''));
+    const randomNo = 'LN-' + Math.floor(100000 + Math.random() * 900000);
+    setNewMemberForm({
+      center_id: targetCenterId ? String(targetCenterId) : '',
+      member_name: '',
+      mobile_no: '',
+      nominee_mobile: '',
+      amount_sanctioned: 10000,
+      member_no: randomNo
+    });
+    setAddError('');
+    setAddSuccess('');
+    setShowAddModal(true);
+  };
+
+  const handleCreateMember = async (e) => {
+    e.preventDefault();
+    setAddError('');
+    setAddSuccess('');
+
+    if (!newMemberForm.member_name.trim()) {
+      setAddError('Please enter member name.');
+      return;
+    }
+    if (!newMemberForm.center_id) {
+      setAddError('Please select a center.');
+      return;
+    }
+    if (!newMemberForm.mobile_no.trim() || newMemberForm.mobile_no.trim().length < 10) {
+      setAddError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    setAddLoading(true);
+    try {
+      const selectedCenter = centers.find(c => String(c.id) === String(newMemberForm.center_id));
+      const centerName = selectedCenter ? selectedCenter.name : '';
+      const loanAmount = Number(newMemberForm.amount_sanctioned) || 10000;
+      const memberNo = newMemberForm.member_no.trim() || ('LN-' + Math.floor(100000 + Math.random() * 900000));
+      const nowISO = new Date().toISOString();
+
+      // 1. Insert into members table
+      const { data: memberData, error: memErr } = await supabase
+        .from('members')
+        .insert([{
+          name: newMemberForm.member_name.trim(),
+          center_id: Number(newMemberForm.center_id),
+          member_no: memberNo,
+          created_at: nowISO
+        }])
+        .select()
+        .single();
+
+      if (memErr) throw memErr;
+      const createdMemberId = memberData.id;
+
+      // 2. Determine scheme
+      const scheme = SCHEME_STANDARDS[loanAmount] || {
+        weeks: 16,
+        emi: Math.ceil(loanAmount / 16),
+        name: `₹${loanAmount.toLocaleString()} Plan`
+      };
+
+      // 3. Insert into loans table
+      const { data: loanData, error: loanErr } = await supabase
+        .from('loans')
+        .insert([{
+          member_id: createdMemberId,
+          center_id: Number(newMemberForm.center_id),
+          center_name: centerName,
+          member_name: newMemberForm.member_name.trim(),
+          mobile_no: newMemberForm.mobile_no.trim(),
+          nominee_mobile: newMemberForm.nominee_mobile.trim() || null,
+          amount_sanctioned: loanAmount,
+          scheme_name: scheme.name,
+          status: 'DISBURSED',
+          disbursement_status: 'CREDITED',
+          credited_at: nowISO,
+          created_at: nowISO,
+          staff_id: staffId,
+          staff_name: staffName
+        }])
+        .select()
+        .single();
+
+      if (loanErr) throw loanErr;
+      const createdLoanId = loanData.id;
+
+      // 4. Generate collection schedules
+      const schedulesToInsert = [];
+      const totalWeeks = scheme.weeks;
+      const emiAmount = scheme.emi;
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() + 7);
+
+      for (let i = 1; i <= totalWeeks; i++) {
+        const schedDate = new Date(startDate);
+        schedDate.setDate(startDate.getDate() + (i - 1) * 7);
+        const schedDateStr = schedDate.toISOString().split('T')[0];
+        const dayName = days[schedDate.getDay()];
+
+        schedulesToInsert.push({
+          loan_id: createdLoanId,
+          member_id: createdMemberId,
+          member_name: newMemberForm.member_name.trim(),
+          center_id: Number(newMemberForm.center_id),
+          center_name: centerName,
+          week_number: i,
+          scheduled_date: schedDateStr,
+          scheduled_day: dayName,
+          amount: emiAmount,
+          status: 'Approved',
+          created_at: nowISO
+        });
+      }
+
+      if (schedulesToInsert.length > 0) {
+        await supabase.from('collection_schedules').insert(schedulesToInsert);
+      }
+
+      // 5. Update local state
+      const newFormattedMember = {
+        ...loanData,
+        member_no: memberNo,
+        amount_sanctioned: loanAmount,
+        _isNew: true
+      };
+
+      setMembers(prev => [newFormattedMember, ...prev]);
+      setJustAddedLoanId(createdLoanId);
+      setActiveView('recent');
+      setRecentFilter('all');
+      setSelectedCenterId('ALL');
+      setSearchQuery('');
+      setAddSuccess(`Member "${newMemberForm.member_name}" added successfully!`);
+
+      setTimeout(() => {
+        setShowAddModal(false);
+        setAddSuccess('');
+      }, 1000);
+
+    } catch (err) {
+      console.error('Error creating member loan:', err);
+      setAddError(err.message || 'Failed to create member. Please try again.');
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
   const centerName = centers.find(c => c.id === memberToPrint?.center_id)?.name || '';
 
   const renderMemberRow = (member) => {
     const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
     const isPrinted = member._printed || printedIds.includes(member.id);
     const memberDate = member.created_at || member.credited_at;
-    const isNew = !isPrinted && memberDate && new Date(memberDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const isRecentlyCreated = member._isNew || (memberDate && new Date(memberDate) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    const isJustAdded = member.id === justAddedLoanId;
+
     return (
-      <div key={member.id} className={`p-6 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-white/5 transition-colors gap-4 ${isNew ? 'bg-green-500/5' : ''}`}>
+      <div 
+        key={member.id} 
+        className={`p-6 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-white/5 transition-all gap-4 ${
+          isJustAdded ? 'bg-green-500/15 border-l-4 border-green-500 animate-pulse' : 
+          (!isPrinted && isRecentlyCreated) ? 'bg-green-500/5' : ''
+        }`}
+      >
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
              {member.member_photo_url ? (
@@ -161,13 +389,33 @@ export default function Dashboard() {
              ) : <FaUsers className="text-slate-500" size={24} />}
           </div>
           <div className="flex-1">
-            <h3 className="font-black text-white text-lg uppercase tracking-tight flex items-center gap-2">
+            <h3 className="font-black text-white text-lg uppercase tracking-tight flex flex-wrap items-center gap-2">
               {member.member_name}
-              {isNew && (
+              
+              {isJustAdded && (
+                <span className="bg-green-400 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest shadow-lg shadow-green-400/30">
+                  JUST ADDED
+                </span>
+              )}
+              
+              {!isPrinted && isRecentlyCreated && !isJustAdded && (
                 <span className="bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest shadow-lg shadow-green-500/20">
                   NEW
                 </span>
               )}
+
+              {isPrinted && (
+                <span className="bg-blue-500/20 text-blue-300 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest border border-blue-500/30">
+                  SLIP READY
+                </span>
+              )}
+
+              {member.status && member.status !== 'DISBURSED' && member.status !== 'ARCHIVED' && (
+                <span className="bg-amber-500/20 text-amber-300 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest border border-amber-500/30">
+                  {member.status}
+                </span>
+              )}
+
               {member.status === 'ARCHIVED' && (
                 <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest shadow-lg shadow-red-500/20">
                   DELETED
@@ -188,6 +436,11 @@ export default function Dashboard() {
                   ₹{member.amount_sanctioned.toLocaleString()}
                 </span>
               ) : null}
+              {member.created_at && (
+                <span className="text-slate-400 text-[10px] font-medium">
+                  {new Date(member.created_at).toLocaleDateString()}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -195,17 +448,17 @@ export default function Dashboard() {
           <button 
             onClick={() => handlePreview(member)}
             disabled={previewLoading}
-            className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+            className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-blue-500/20 cursor-pointer"
           >
             <FaPrint size={14} /> Preview
           </button>
           {member.status !== 'ARCHIVED' ? (
             <button 
               onClick={() => handleDeleteMember(member.id)}
-              className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95"
+              className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 cursor-pointer"
               title="Delete Member"
             >
-              Delete
+              <FaTrash size={12} />
             </button>
           ) : (
             <button 
@@ -265,13 +518,12 @@ export default function Dashboard() {
       })
       .map(center => {
         const centerSearchText = getCenterSearchString(center);
-        // Center itself matches if all query tokens are found in center metadata
         const isCenterMatch = qTokens.length > 0 && qTokens.every(token => centerSearchText.includes(token));
 
         const centerMembers = members.filter(m => m.center_id === center.id);
 
         const filteredMembers = isCenterMatch
-          ? centerMembers // If center itself matched, show all members in this center
+          ? centerMembers
           : centerMembers.filter(m => {
               if (qTokens.length === 0) return true;
               const memText = getMemberSearchString(m, center);
@@ -299,22 +551,24 @@ export default function Dashboard() {
         };
       })
       .filter(group => {
-        // If there's an active search or specific center filter selected:
         if (qTokens.length > 0 || selectedCenterId !== 'ALL') {
           return group.members.length > 0 || group.isCenterMatch;
         }
-        // If viewing all with no search: show centers that have members
         return group.members.length > 0;
       });
   };
 
   const getRecentMembers = () => {
     const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
-    return members.filter(member => {
-      const isPrinted = member._printed || printedIds.includes(member.id);
-      const memberDate = member.created_at || member.credited_at;
-      return !isPrinted && memberDate && new Date(memberDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    }).sort((a, b) => {
+    
+    // Sort all active/non-archived members by creation date descending
+    const activeMembers = members.filter(m => m.status !== 'ARCHIVED');
+
+    const sorted = [...activeMembers].sort((a, b) => {
+      // Prioritize just added loan
+      if (a.id === justAddedLoanId) return -1;
+      if (b.id === justAddedLoanId) return 1;
+
       const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.credited_at ? new Date(a.credited_at).getTime() : 0);
       const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.credited_at ? new Date(b.credited_at).getTime() : 0);
       const validA = isNaN(dateA) ? 0 : dateA;
@@ -326,12 +580,32 @@ export default function Dashboard() {
       }
       return validB - validA;
     });
+
+    return sorted.filter(member => {
+      const isPrinted = member._printed || printedIds.includes(member.id);
+      if (recentFilter === 'new') {
+        return !isPrinted;
+      }
+      if (recentFilter === 'printed') {
+        return isPrinted;
+      }
+      return true;
+    });
   };
 
   const recentMembers = getRecentMembers();
   const filteredCenterGroups = getFilteredCenterGroups();
   const totalFilteredMembers = filteredCenterGroups.reduce((acc, g) => acc + g.members.length, 0);
   const isSearchOrFilterActive = Boolean(searchQuery.trim() || selectedCenterId !== 'ALL');
+  
+  const printedCount = members.filter(m => {
+    const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
+    return (m._printed || printedIds.includes(m.id)) && m.status !== 'ARCHIVED';
+  }).length;
+  const newCount = members.filter(m => {
+    const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
+    return !m._printed && !printedIds.includes(m.id) && m.status !== 'ARCHIVED';
+  }).length;
 
   return (
     <>
@@ -341,28 +615,59 @@ export default function Dashboard() {
           {/* Sidebar */}
           <div className="w-full md:w-64 shrink-0">
             <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 md:sticky md:top-8 shadow-2xl md:h-[calc(100vh-4rem)] flex flex-col">
-              <div className="mb-8">
+              <div className="mb-6">
                 <h1 className="text-xl font-black text-white leading-tight">Welcome,<br/>{staffName}</h1>
                 <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mt-2">ID: {staffId}</p>
               </div>
+
+              {/* Quick Add Member Button in Sidebar */}
+              <button
+                onClick={() => handleOpenAddModal()}
+                className="w-full mb-6 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white font-black text-xs uppercase tracking-widest py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2.5 shadow-lg shadow-green-500/20 transition-all active:scale-95 cursor-pointer"
+              >
+                <FaUserPlus size={15} /> + Add Member
+              </button>
               
               <div className="space-y-2">
                 <button 
                   onClick={() => { setActiveView('recent'); setSearchQuery(''); setSelectedCenterId('ALL'); }}
-                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center gap-3 ${activeView === 'recent' && !isSearchOrFilterActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-between gap-3 cursor-pointer ${activeView === 'recent' && !isSearchOrFilterActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                 >
-                  <FaUsers size={16} /> Recent
+                  <span className="flex items-center gap-3">
+                    <FaUsers size={16} /> Recent
+                  </span>
+                  <span className="bg-white/20 text-white text-[10px] font-black px-2 py-0.5 rounded-md">
+                    {members.filter(m => m.status !== 'ARCHIVED').length}
+                  </span>
                 </button>
                 <button 
                   onClick={() => { setActiveView('all'); setSelectedCenterId('ALL'); }}
-                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center gap-3 ${activeView === 'all' && !isSearchOrFilterActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                  className={`w-full text-left px-5 py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-between gap-3 cursor-pointer ${activeView === 'all' && !isSearchOrFilterActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                 >
-                  <FaUsers size={16} /> All Members
+                  <span className="flex items-center gap-3">
+                    <FaUsers size={16} /> All Members
+                  </span>
+                  <span className="bg-white/20 text-white text-[10px] font-black px-2 py-0.5 rounded-md">
+                    {members.length}
+                  </span>
                 </button>
               </div>
 
-              <div className="mt-auto pt-8 border-t border-white/10">
-                <button onClick={handleLogout} className="w-full flex items-center justify-center gap-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95">
+              <div className="mt-auto pt-6 border-t border-white/10 space-y-3">
+                <button 
+                  onClick={() => fetchCenters(true)} 
+                  disabled={refreshing || loading}
+                  className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 px-4 py-3 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                  title="Reload data from database"
+                >
+                  <FaSyncAlt size={13} className={refreshing || loading ? 'animate-spin text-blue-400' : ''} />
+                  {refreshing ? 'Refreshing...' : 'Refresh Data'}
+                </button>
+
+                <button 
+                  onClick={handleLogout} 
+                  className="w-full flex items-center justify-center gap-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95 cursor-pointer"
+                >
                   <FaSignOutAlt size={16} /> Logout
                 </button>
               </div>
@@ -396,30 +701,42 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative w-full md:w-96">
-                <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search center, member name, ID, phone..." 
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (e.target.value && activeView === 'recent') {
-                      setActiveView('all');
-                    }
-                  }}
-                  className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-12 pr-10 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm font-bold placeholder:text-slate-600"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                    title="Clear Search"
-                  >
-                    <FaTimes size={14} />
-                  </button>
-                )}
+              {/* Search Bar & Action Buttons */}
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="relative flex-1 md:w-80">
+                  <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search center, member, ID, phone..." 
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      if (e.target.value && activeView === 'recent') {
+                        setActiveView('all');
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-white/10 rounded-2xl pl-12 pr-10 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm font-bold placeholder:text-slate-600"
+                  />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title="Clear Search"
+                    >
+                      <FaTimes size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Direct Add Member Button */}
+                <button
+                  onClick={() => handleOpenAddModal()}
+                  className="bg-green-600 hover:bg-green-500 text-white p-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-600/20 active:scale-95 cursor-pointer shrink-0"
+                  title="Add New Member"
+                >
+                  <FaPlus size={15} />
+                  <span className="hidden sm:inline text-xs uppercase tracking-wider font-black">Add Member</span>
+                </button>
               </div>
             </div>
 
@@ -452,49 +769,102 @@ export default function Dashboard() {
 
             {/* Members List Grouped by Center */}
             {loading ? (
-               <div className="text-center text-white py-10 font-bold uppercase tracking-widest animate-pulse">Loading members...</div>
+               <div className="text-center text-white py-16 font-bold uppercase tracking-widest animate-pulse flex flex-col items-center gap-4">
+                 <FaSyncAlt className="animate-spin text-blue-500" size={28} />
+                 <span>Loading members...</span>
+               </div>
             ) : centers.length > 0 ? (
               <div className="space-y-8">
                 
                 {/* Recently Added Section (only when on recent view and no active search/filter) */}
                 {activeView === 'recent' && !isSearchOrFilterActive ? (
-                  recentMembers.length > 0 ? (
-                    <div className="mb-8 space-y-4">
-                      <div className="bg-green-900/20 border border-green-500/30 rounded-2xl p-4 flex justify-between items-center shadow-lg shadow-green-900/10">
-                        <h2 className="text-xl font-bold text-green-400 tracking-tight flex items-center gap-2">
-                          <span className="w-2 h-8 bg-green-400 rounded-full"></span>
-                          Recently Added
+                  <div className="mb-8 space-y-4">
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xl">
+                      <div>
+                        <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+                          <span className="w-2.5 h-8 bg-green-500 rounded-full"></span>
+                          Recently Added Members
                         </h2>
-                        <span className="bg-green-500/20 text-green-300 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-green-500/30">
-                          {recentMembers.length} Total New
-                        </span>
+                        <p className="text-slate-400 text-xs mt-1">
+                          Showing latest added loans and active members
+                        </p>
                       </div>
-                      
-                      {centers.map(center => {
+
+                      {/* Sub-filter tabs & Reset Button */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="bg-slate-950 p-1 rounded-xl border border-white/10 flex items-center gap-1">
+                          <button
+                            onClick={() => setRecentFilter('all')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${recentFilter === 'all' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            All ({recentMembers.length})
+                          </button>
+                          <button
+                            onClick={() => setRecentFilter('new')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${recentFilter === 'new' ? 'bg-green-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            New ({newCount})
+                          </button>
+                          <button
+                            onClick={() => setRecentFilter('printed')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${recentFilter === 'printed' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            Printed ({printedCount})
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={handleResetPrintHistory}
+                          className="text-[10px] text-slate-400 hover:text-slate-200 bg-slate-800/80 hover:bg-slate-800 px-2.5 py-2 rounded-xl border border-white/5 font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Reset slip printed markers"
+                        >
+                          <FaHistory size={10} /> Reset Viewed
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {recentMembers.length > 0 ? (
+                      centers.map(center => {
                         const centerRecent = recentMembers.filter(m => m.center_id === center.id);
                         if (centerRecent.length === 0) return null;
                         return (
-                          <div key={`recent-${center.id}`} className="bg-green-900/10 border border-green-500/20 rounded-3xl overflow-hidden shadow-xl shadow-green-900/5">
-                            <div className="p-4 border-b border-green-500/10 bg-green-800/20 flex justify-between items-center">
-                              <h3 className="text-md font-bold text-green-300 tracking-tight flex items-center gap-2">
+                          <div key={`recent-${center.id}`} className="bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+                            <div className="p-4 border-b border-white/10 bg-slate-800/50 flex justify-between items-center">
+                              <h3 className="text-md font-bold text-white tracking-tight flex items-center gap-2">
+                                <span className="w-2 h-5 bg-green-500 rounded-full"></span>
                                 {center.name} Center
                               </h3>
-                              <span className="bg-green-500/10 text-green-400 text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-widest border border-green-500/20">
-                                {centerRecent.length} Members
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="bg-green-500/10 text-green-400 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest border border-green-500/20">
+                                  {centerRecent.length} {centerRecent.length === 1 ? 'Member' : 'Members'}
+                                </span>
+                                <button
+                                  onClick={() => handleOpenAddModal(center.id)}
+                                  className="text-[10px] bg-green-600/20 hover:bg-green-600 text-green-300 hover:text-white border border-green-500/30 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider transition-all cursor-pointer"
+                                >
+                                  + Add Here
+                                </button>
+                              </div>
                             </div>
-                            <div className="divide-y divide-green-500/10">
+                            <div className="divide-y divide-white/5">
                               {centerRecent.map(member => renderMemberRow(member))}
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="p-12 text-center text-slate-500 font-bold italic bg-slate-900 rounded-3xl border border-white/10">
-                      No recently added members found.
-                    </div>
-                  )
+                      })
+                    ) : (
+                      <div className="p-12 text-center text-slate-500 font-bold italic bg-slate-900 rounded-3xl border border-white/10 flex flex-col items-center gap-4">
+                        <FaUsers size={32} className="text-slate-600" />
+                        <span>No members found matching the selected filter ({recentFilter}).</span>
+                        <button
+                          onClick={() => handleOpenAddModal()}
+                          className="bg-green-600 hover:bg-green-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-green-600/20"
+                        >
+                          + Add First Member
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ) : null}
 
                 {/* All Members / Filtered Centers List */}
@@ -512,9 +882,17 @@ export default function Dashboard() {
                               </span>
                             )}
                           </h2>
-                          <span className="bg-blue-500/10 text-blue-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-500/20">
-                            {centerMembers.length} {centerMembers.length === 1 ? 'Member' : 'Members'}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="bg-blue-500/10 text-blue-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-500/20">
+                              {centerMembers.length} {centerMembers.length === 1 ? 'Member' : 'Members'}
+                            </span>
+                            <button
+                              onClick={() => handleOpenAddModal(center.id)}
+                              className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-green-600/20"
+                            >
+                              + Add Member
+                            </button>
+                          </div>
                         </div>
                         {centerMembers.length > 0 ? (
                           <div className="divide-y divide-white/10">
@@ -522,7 +900,7 @@ export default function Dashboard() {
                           </div>
                         ) : (
                           <div className="p-8 text-center text-slate-500 font-medium italic">
-                            No active or disbursed members found in this center.
+                            No members found in this center.
                           </div>
                         )}
                       </div>
@@ -557,10 +935,184 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Add Member Modal */}
+      {showAddModal && (
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-white/15 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden my-8">
+            <div className="p-6 border-b border-white/10 bg-slate-800/60 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-400">
+                  <FaUserPlus size={18} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-white uppercase tracking-wider">Add New Member</h2>
+                  <p className="text-slate-400 text-xs">Create member & loan schedule</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <FaTimes size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateMember} className="p-6 space-y-4">
+              {addError && (
+                <div className="bg-red-500/15 border border-red-500/30 text-red-400 p-3.5 rounded-2xl text-xs font-bold">
+                  ⚠️ {addError}
+                </div>
+              )}
+
+              {addSuccess && (
+                <div className="bg-green-500/15 border border-green-500/30 text-green-400 p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2">
+                  <FaCheckCircle size={15} /> {addSuccess}
+                </div>
+              )}
+
+              {/* Center Dropdown */}
+              <div>
+                <label className="block text-xs font-black text-slate-300 uppercase tracking-widest mb-1.5">
+                  Select Center <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={newMemberForm.center_id}
+                  onChange={(e) => setNewMemberForm(prev => ({ ...prev, center_id: e.target.value }))}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                  required
+                >
+                  <option value="">-- Choose Center --</option>
+                  {centers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.center_no ? `(${c.center_no})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Member Name */}
+              <div>
+                <label className="block text-xs font-black text-slate-300 uppercase tracking-widest mb-1.5">
+                  Member Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. SANGEETHA R"
+                  value={newMemberForm.member_name}
+                  onChange={(e) => setNewMemberForm(prev => ({ ...prev, member_name: e.target.value }))}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors uppercase"
+                  required
+                />
+              </div>
+
+              {/* Member Mobile & Nominee Mobile */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-black text-slate-300 uppercase tracking-widest mb-1.5">
+                    Member Mobile <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="10-digit mobile"
+                    maxLength={10}
+                    value={newMemberForm.mobile_no}
+                    onChange={(e) => setNewMemberForm(prev => ({ ...prev, mobile_no: e.target.value.replace(/\D/g, '') }))}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-mono font-bold placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-300 uppercase tracking-widest mb-1.5">
+                    Nominee Mobile
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="Optional"
+                    maxLength={10}
+                    value={newMemberForm.nominee_mobile}
+                    onChange={(e) => setNewMemberForm(prev => ({ ...prev, nominee_mobile: e.target.value.replace(/\D/g, '') }))}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-mono font-bold placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Loan Amount Scheme Selection */}
+              <div>
+                <label className="block text-xs font-black text-slate-300 uppercase tracking-widest mb-2">
+                  Loan Amount & Scheme
+                </label>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {[10000, 11000, 12000, 13000, 15000].map(amt => (
+                    <button
+                      type="button"
+                      key={amt}
+                      onClick={() => setNewMemberForm(prev => ({ ...prev, amount_sanctioned: amt }))}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+                        Number(newMemberForm.amount_sanctioned) === amt
+                          ? 'bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30'
+                          : 'bg-slate-950 text-slate-300 border-white/10 hover:bg-slate-800'
+                      }`}
+                    >
+                      ₹{amt.toLocaleString()}
+                      <span className="block text-[9px] font-normal text-slate-400 mt-0.5">
+                        {SCHEME_STANDARDS[amt]?.weeks} wks @ ₹{SCHEME_STANDARDS[amt]?.emi}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Member ID */}
+              <div>
+                <label className="block text-xs font-black text-slate-300 uppercase tracking-widest mb-1.5">
+                  Member ID / No
+                </label>
+                <input
+                  type="text"
+                  value={newMemberForm.member_no}
+                  onChange={(e) => setNewMemberForm(prev => ({ ...prev, member_no: e.target.value }))}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-slate-300 text-sm font-mono font-bold focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="e.g. LN-123456"
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-4 border-t border-white/10 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={addLoading}
+                  className="flex-1 py-3.5 px-4 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addLoading}
+                  className="flex-1 py-3.5 px-4 rounded-xl font-black text-xs uppercase tracking-[0.15em] bg-green-600 hover:bg-green-500 text-white transition-all shadow-lg shadow-green-600/30 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {addLoading ? (
+                    <>
+                      <FaSyncAlt className="animate-spin" size={13} />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaCheck size={13} />
+                      <span>Save & Add</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Preview Modal - Visible on Screen */}
       {showPreview && memberToPrint && (
         <div className="no-print fixed inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm overflow-y-auto py-6 px-4">
-          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-[900px] flex flex-col">
+          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-[900px] flex flex-col my-auto">
             
             {/* Sticky Header */}
             <div className="p-5 border-b border-white/10 flex justify-between items-center bg-slate-800/50 rounded-t-3xl sticky top-0 z-10">
@@ -568,20 +1120,20 @@ export default function Dashboard() {
               <div className="flex gap-3">
                 <button 
                   onClick={closePreview}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10"
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={executePrint}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
                 >
                   <FaPrint size={13} /> Print Now
                 </button>
               </div>
             </div>
 
-            {/* Scrollable slip area — renders at natural A4 width, overflow scrolls */}
+            {/* Scrollable slip area */}
             <div className="overflow-x-auto overflow-y-visible bg-slate-950 p-6 flex justify-center rounded-b-3xl">
               <div className="origin-top" style={{ zoom: 0.82 }}>
                 <PrintableMemberSlip member={memberToPrint} centerName={centerName} isPreview={true} schedules={memberSchedules} />
