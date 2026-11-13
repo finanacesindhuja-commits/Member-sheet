@@ -26,7 +26,7 @@ export default function LoanVerify() {
   const fetchLoanDetails = async () => {
     try {
       setError(null);
-      const LOAN_SELECT = 'id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at, mobile_no, nominee_mobile, center_id';
+      const LOAN_SELECT = 'id, member_name, status, member_id, member_photo_url, amount_sanctioned, credited_at, created_at, mobile_no, nominee_mobile, center_id, scheme_name, is_saving_plan, saving_per_week, stp_amount, total_saving';
 
       let loanData = null;
       let loanError = null;
@@ -148,7 +148,7 @@ export default function LoanVerify() {
       // Fetch schedules without 'penalty' column (penalty is calculated dynamically)
       let { data: scheduleData, error: schError } = await supabase
         .from('collection_schedules')
-        .select('id, week_number, scheduled_date, amount, status, collected_amount, scheduled_day')
+        .select('id, week_number, scheduled_date, amount, status, collected_amount, scheduled_day, emi_amount, saving_amount, plan_name')
         .or(`loan_id.eq.${loanData.id},and(loan_id.is.null,member_id.eq.${loanData.id})`)
         .order('week_number', { ascending: true });
 
@@ -160,7 +160,7 @@ export default function LoanVerify() {
       if ((!scheduleData || scheduleData.length === 0) && loanData.member_name) {
         const { data: nameSchedules } = await supabase
           .from('collection_schedules')
-          .select('id, week_number, scheduled_date, amount, status, collected_amount, scheduled_day')
+          .select('id, week_number, scheduled_date, amount, status, collected_amount, scheduled_day, emi_amount, saving_amount, plan_name')
           .ilike('member_name', loanData.member_name.trim())
           .order('week_number', { ascending: true });
 
@@ -173,23 +173,43 @@ export default function LoanVerify() {
       let fetchedSchedules = scheduleData || [];
       if (fetchedSchedules.length === 0 && loanData.amount_sanctioned) {
         const loanAmt = Number(loanData.amount_sanctioned) || 10000;
-        const SCHEME_STANDARDS = {
-          10000: { weeks: 12, emi: 1100 },
-          11000: { weeks: 15, emi: 1100 },
-          12000: { weeks: 16, emi: 1020 },
-          13000: { weeks: 18, emi: 990 },
-          15000: { weeks: 22, emi: 1000 },
-        };
-        const standard = SCHEME_STANDARDS[loanAmt] || { weeks: 16, emi: Math.round(loanAmt / 16) };
+        const isSaving = Boolean(loanData.is_saving_plan) || String(loanData.scheme_name || '').toLowerCase().includes('saving');
+
+        let weeks = 16;
+        let emi = Math.round(loanAmt / 16);
+        let emiAmount = emi;
+        let savingAmount = 0;
+
+        if (isSaving) {
+          weeks = 15;
+          emiAmount = 890;
+          savingAmount = Number(loanData.saving_per_week) || 100;
+          emi = emiAmount + savingAmount; // 990
+        } else {
+          const SCHEME_STANDARDS = {
+            10000: { weeks: 12, emi: 1100 },
+            11000: { weeks: 15, emi: 1100 },
+            12000: { weeks: 16, emi: 1020 },
+            13000: { weeks: 18, emi: 990 },
+            15000: { weeks: 22, emi: 1000 },
+          };
+          const standard = SCHEME_STANDARDS[loanAmt] || { weeks: 16, emi: Math.round(loanAmt / 16) };
+          weeks = standard.weeks;
+          emi = standard.emi;
+          emiAmount = standard.emi;
+        }
+
         const baseDate = loanData.credited_at ? new Date(loanData.credited_at) : new Date();
 
-        fetchedSchedules = Array.from({ length: standard.weeks }, (_, i) => {
+        fetchedSchedules = Array.from({ length: weeks }, (_, i) => {
           const d = new Date(baseDate);
           d.setDate(d.getDate() + (i + 1) * 7);
           return {
             week_number: i + 1,
             scheduled_date: d.toISOString().split('T')[0],
-            amount: standard.emi,
+            amount: emi,
+            emi_amount: emiAmount,
+            saving_amount: savingAmount,
             status: 'Approved'
           };
         });
@@ -303,6 +323,16 @@ export default function LoanVerify() {
     : null;
   const totalPenalty = schedules.reduce((sum, s) => sum + calculatePenalty(s.scheduled_date, s.status), 0);
 
+  const isSavingPlan = Boolean(loan?.is_saving_plan) ||
+    String(loan?.scheme_name || '').toLowerCase().includes('saving') ||
+    schedules.some(s => Number(s.saving_amount) > 0 || String(s.plan_name || '').toLowerCase().includes('saving'));
+
+  const thisWeekSaving = Number(thisWeekSchedule?.saving_amount) || (isSavingPlan ? (Number(loan?.saving_per_week) || 100) : 0);
+  const thisWeekEmi = Number(thisWeekSchedule?.emi_amount) || (currentAmount ? (Number(currentAmount) - thisWeekSaving) : 0);
+
+  const nextWeekSaving = Number(nextWeekSchedule?.saving_amount) || (isSavingPlan ? (Number(loan?.saving_per_week) || 100) : 0);
+  const nextWeekEmi = Number(nextWeekSchedule?.emi_amount) || (nextAmount ? (Number(nextAmount) - nextWeekSaving) : 0);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center p-4 font-sans pb-10">
       <div className="w-full max-w-sm">
@@ -340,6 +370,16 @@ export default function LoanVerify() {
                     <span className="text-white text-4xl font-black leading-none">{Number(currentAmount).toLocaleString('en-IN')}</span>
                   </div>
                 </div>
+                {isSavingPlan && (
+                  <div className="mt-3 pt-2.5 border-t border-emerald-500/20 flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-emerald-200">
+                      Loan EMI: <span className="text-white font-black">₹{thisWeekEmi.toLocaleString('en-IN')}</span>
+                    </span>
+                    <span className="text-emerald-300 bg-emerald-950/70 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                      + Saving: <span className="text-emerald-200 font-black">₹{thisWeekSaving.toLocaleString('en-IN')}</span>
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -369,6 +409,16 @@ export default function LoanVerify() {
                     <span className="text-white text-4xl font-black leading-none">{Number(nextAmount).toLocaleString('en-IN')}</span>
                   </div>
                 </div>
+                {isSavingPlan && (
+                  <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-amber-200">
+                      Loan EMI: <span className="text-white font-black">₹{nextWeekEmi.toLocaleString('en-IN')}</span>
+                    </span>
+                    <span className="text-amber-300 bg-amber-950/70 px-2 py-0.5 rounded-md border border-amber-500/30">
+                      + Saving: <span className="text-amber-200 font-black">₹{nextWeekSaving.toLocaleString('en-IN')}</span>
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -440,8 +490,42 @@ export default function LoanVerify() {
               <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-widest">
                 <FaRupeeSign size={10} /> Loan Amount
               </div>
-              <span className="text-sm font-black text-emerald-400">₹{Number(loan.amount_sanctioned || 0).toLocaleString('en-IN')}</span>
+              <div className="text-right">
+                <span className="text-sm font-black text-emerald-400">₹{Number(loan.amount_sanctioned || 0).toLocaleString('en-IN')}</span>
+                {isSavingPlan && (
+                  <span className="block text-[9px] font-black uppercase text-emerald-300">
+                    {loan.scheme_name || 'Saving Plan'}
+                  </span>
+                )}
+              </div>
             </div>
+
+            {isSavingPlan && (
+              <div className="flex items-center justify-between px-5 py-3 bg-emerald-950/20">
+                <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase tracking-widest">
+                  💰 Weekly Saving
+                </div>
+                <span className="text-xs font-black text-emerald-300">₹{Number(loan.saving_per_week || 100).toLocaleString('en-IN')} / week</span>
+              </div>
+            )}
+
+            {isSavingPlan && Number(loan.stp_amount) > 0 && (
+              <div className="flex items-center justify-between px-5 py-3">
+                <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                  STP Amount
+                </div>
+                <span className="text-xs font-black text-white">₹{Number(loan.stp_amount).toLocaleString('en-IN')}</span>
+              </div>
+            )}
+
+            {isSavingPlan && Number(loan.total_saving) > 0 && (
+              <div className="flex items-center justify-between px-5 py-3 bg-emerald-950/30">
+                <div className="flex items-center gap-2 text-emerald-300 text-[10px] font-black uppercase tracking-widest">
+                  Total Savings Balance
+                </div>
+                <span className="text-xs font-black text-emerald-400">₹{Number(loan.total_saving).toLocaleString('en-IN')}</span>
+              </div>
+            )}
 
             {loan.credited_at && (
               <div className="flex items-center justify-between px-5 py-3">

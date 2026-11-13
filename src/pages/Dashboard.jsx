@@ -52,6 +52,10 @@ export default function Dashboard() {
               const formatted = {
                 ...newLoan,
                 amount_sanctioned: Number(newLoan.amount_sanctioned) || 0,
+                is_saving_plan: Boolean(newLoan.is_saving_plan) || String(newLoan.scheme_name || '').toLowerCase().includes('saving'),
+                saving_per_week: Number(newLoan.saving_per_week) || 0,
+                stp_amount: Number(newLoan.stp_amount) || 0,
+                total_saving: Number(newLoan.total_saving) || 0,
                 _isNew: true
               };
               return [formatted, ...prev];
@@ -98,7 +102,7 @@ export default function Dashboard() {
       // Fetch all loans belonging to the staff's centers
       const { data: membersData, error: memError } = await supabase
         .from('loans')
-        .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, scheme_name, members(member_no)')
+        .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, scheme_name, is_saving_plan, saving_per_week, stp_amount, total_saving, members(member_no)')
         .in('center_id', centerIds)
         .order('created_at', { ascending: false });
 
@@ -108,7 +112,11 @@ export default function Dashboard() {
         ...m,
         member_no: m.members?.member_no || null,
         loan_app_id: m.loan_app_id || null,
-        amount_sanctioned: Number(m.amount_sanctioned) || 0
+        amount_sanctioned: Number(m.amount_sanctioned) || 0,
+        is_saving_plan: Boolean(m.is_saving_plan) || String(m.scheme_name || '').toLowerCase().includes('saving'),
+        saving_per_week: Number(m.saving_per_week) || 0,
+        stp_amount: Number(m.stp_amount) || 0,
+        total_saving: Number(m.total_saving) || 0
       }));
       
       setMembers(formattedMembers);
@@ -145,7 +153,7 @@ export default function Dashboard() {
       // Fetch schedules based on the loan ID
       const { data, error } = await supabase
         .from('collection_schedules')
-        .select('scheduled_date, amount, week_number, scheduled_day')
+        .select('scheduled_date, amount, week_number, scheduled_day, emi_amount, saving_amount, plan_name')
         .or(`loan_id.eq.${member.id},and(loan_id.is.null,member_id.eq.${member.id})`)
         .order('week_number', { ascending: true });
         
@@ -245,6 +253,12 @@ export default function Dashboard() {
                   DELETED
                 </span>
               )}
+
+              {member.is_saving_plan && (
+                <span className="bg-emerald-500/20 text-emerald-300 text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest border border-emerald-500/30 flex items-center gap-1">
+                  💰 SAVING ({member.saving_per_week ? `₹${member.saving_per_week}/wk` : '₹100/wk'})
+                </span>
+              )}
             </h3>
             <div className="flex flex-wrap items-center gap-2 mt-1.5">
               <span className="text-slate-400 text-xs font-mono font-bold bg-slate-800/50 px-2 py-1 rounded-md border border-white/5">
@@ -260,6 +274,11 @@ export default function Dashboard() {
                   ₹{member.amount_sanctioned.toLocaleString()}
                 </span>
               ) : null}
+              {member.is_saving_plan && (
+                <span className="text-emerald-400 text-xs font-black bg-emerald-900/20 px-2 py-1 rounded-md border border-emerald-500/20">
+                  {member.scheme_name || '15 Wks Saving'}
+                </span>
+              )}
               {member.created_at && (
                 <span className="text-slate-400 text-[10px] font-medium">
                   {new Date(member.created_at).toLocaleDateString()}
@@ -322,6 +341,8 @@ export default function Dashboard() {
       String(m.mobile_no || ''),
       String(m.nominee_mobile || ''),
       String(m.amount_sanctioned || ''),
+      m.scheme_name,
+      m.is_saving_plan ? 'saving plan savings' : '',
       center?.name,
       `${center?.name || ''} Center`,
       center?.center_no,

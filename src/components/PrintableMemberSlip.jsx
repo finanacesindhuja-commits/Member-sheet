@@ -6,14 +6,10 @@ import logo from '../assets/logo.jpg';
 export default function PrintableMemberSlip({ member, centerName, isPreview = false, schedules = [] }) {
   if (!member) return null;
 
-  // Use actual schedules, fallback to empty array if none
-  const rows = schedules.length > 0 ? schedules : Array.from({ length: 16 });
-
-  // Get collection day from database or calculate from first schedule
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const collectionDay = schedules.length > 0
-    ? (schedules[0].scheduled_day || days[new Date(schedules[0].scheduled_date).getDay()])
-    : 'N/A';
+  // Determine if this is a saving plan loan
+  const isSavingPlan = Boolean(member.is_saving_plan) ||
+    String(member.scheme_name || '').toLowerCase().includes('saving') ||
+    schedules.some(s => Number(s.saving_amount) > 0 || String(s.plan_name || '').toLowerCase().includes('saving'));
 
   // Standard scheme lookup - weeks for each loan amount
   const SCHEME_STANDARDS = {
@@ -24,35 +20,54 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
     15000: { weeks: 22, emi: 1100 },
   };
   const loanAmount = Number(member.amount_sanctioned) || 0;
-  const scheme = SCHEME_STANDARDS[loanAmount];
+  const standardScheme = SCHEME_STANDARDS[loanAmount];
 
-  // Total weeks from scheme or actual schedule count
-  const totalWeeks = scheme ? scheme.weeks : (schedules.length > 0 ? schedules.length : 16);
+  // Total weeks: schedules length > 0, or saving scheme (15), or standard scheme
+  const totalWeeks = schedules.length > 0 
+    ? schedules.length 
+    : (isSavingPlan ? 15 : (standardScheme ? standardScheme.weeks : 16));
+
+  // Use actual schedules, fallback to empty array of totalWeeks length
+  const rows = schedules.length > 0 ? schedules : Array.from({ length: totalWeeks });
+
+  // Get collection day from database or calculate from first schedule
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const collectionDay = schedules.length > 0
+    ? (schedules[0].scheduled_day || days[new Date(schedules[0].scheduled_date).getDay()])
+    : 'N/A';
 
   // Principal per week = Loan Amount ÷ Total Weeks (same for every week)
   const principalPerWeek = Math.floor(loanAmount / totalWeeks);
+
+  // Saving amount per week
+  const savingPerWeek = isSavingPlan 
+    ? (Number(member.saving_per_week) || (schedules[0]?.saving_amount ? Number(schedules[0].saving_amount) : 100))
+    : 0;
+
+  const stpAmount = Number(member.stp_amount) || 0;
+  const totalSaving = Number(member.total_saving) || 0;
 
   // Dynamic scaling classes based on number of weeks to prevent A4 print cutoff
   const isCompact = totalWeeks > 12;
   const isSuperCompact = totalWeeks > 16;
 
-  const containerPadding = isSuperCompact ? 'p-3' : 'p-4';
-  const rowHeight = isSuperCompact ? 'h-[23px]' : isCompact ? 'h-[27px]' : 'h-8';
-  const cellPadding = isSuperCompact ? 'py-[1px] px-1' : isCompact ? 'py-0.5 px-1.5' : 'py-1 px-2';
-  const tableFontSize = isSuperCompact ? 'text-[9.5px]' : isCompact ? 'text-[10.5px]' : 'text-[11px]';
+  const containerPadding = isSuperCompact ? 'p-3' : isCompact ? 'p-3.5' : 'p-4';
+  const rowHeight = isSuperCompact ? 'h-[23px]' : isCompact ? 'h-[26px]' : 'h-8';
+  const cellPadding = isSuperCompact ? 'py-[1px] px-1' : isCompact ? 'py-0.5 px-1' : 'py-1 px-2';
+  const tableFontSize = isSuperCompact ? 'text-[9.5px]' : isCompact ? 'text-[10px]' : 'text-[11px]';
   const numberFontSize = isSuperCompact ? 'text-xs' : 'text-sm';
-  const emiFontSize = isSuperCompact ? 'text-xs' : 'text-sm';
+  const emiFontSize = isSuperCompact ? 'text-xs' : isCompact ? 'text-xs font-black' : 'text-sm';
   
-  const headerSpacing = isSuperCompact ? 'pb-1 mb-1' : 'pb-2 mb-2';
+  const headerSpacing = isSuperCompact ? 'pb-1 mb-1' : isCompact ? 'pb-1.5 mb-1.5' : 'pb-2 mb-2';
   const logoSize = isSuperCompact ? 'w-16 h-16' : 'w-20 h-20';
   const infoGridMargin = isSuperCompact ? '-mt-5' : '-mt-4';
-  const infoGridPadding = isSuperCompact ? 'p-2 mb-1' : 'p-3 mb-2';
-  const infoGridGapY = isSuperCompact ? 'gap-y-1.5' : 'gap-y-3';
+  const infoGridPadding = isSuperCompact ? 'p-2 mb-1' : isCompact ? 'p-2.5 mb-1.5' : 'p-3 mb-2';
+  const infoGridGapY = isSuperCompact ? 'gap-y-1.5' : isCompact ? 'gap-y-2' : 'gap-y-3';
   const infoGridFontSize = isSuperCompact ? 'text-[10px]' : 'text-[11px]';
-  const titleMargin = isSuperCompact ? 'mb-1.5' : 'mb-3';
+  const titleMargin = isSuperCompact ? 'mb-1' : isCompact ? 'mb-1.5' : 'mb-3';
   const footerMargin = isSuperCompact ? 'mt-0.5 pt-0.5' : 'mt-1 pt-1';
-  const photoHeight = isSuperCompact ? 'w-24 h-28' : 'w-28 h-32';
-  const qrCodeSize = isSuperCompact ? 130 : isCompact ? 145 : 160;
+  const photoHeight = isSuperCompact ? 'w-24 h-28' : isCompact ? 'w-26 h-30' : 'w-28 h-32';
+  const qrCodeSize = isSuperCompact ? 130 : isCompact ? 140 : 160;
 
   return (
     <div className={`${containerPadding} w-[210mm] mx-auto bg-white text-black font-sans box-border relative ${isPreview ? 'shadow-2xl border border-gray-300' : 'print-only h-[296mm] overflow-hidden'}`}>
@@ -82,7 +97,14 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-800 uppercase text-[9px]">Loan Amount</span>
-              <span className="font-black text-base">₹{Number(member.amount_sanctioned).toLocaleString()}</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-black text-base">₹{Number(member.amount_sanctioned).toLocaleString()}</span>
+                {isSavingPlan && (
+                  <span className="text-[8px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">
+                    Saving Plan
+                  </span>
+                )}
+              </div>
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-800 uppercase text-[9px]">Center Name</span>
@@ -131,6 +153,36 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             </div>
           </div>
         </div>
+
+        {/* Saving Plan Details Banner if applicable */}
+        {isSavingPlan && (
+          <div className="mt-2 pt-1.5 border-t border-black/20 flex flex-wrap items-center justify-between gap-2 text-[9.5px] font-bold bg-emerald-50/70 -mx-1 px-2 py-1 rounded">
+            <span className="text-emerald-900">
+              <span className="uppercase text-[8px] text-gray-600 font-bold">Scheme: </span>
+              {member.scheme_name || `₹${Number(member.amount_sanctioned || 10000).toLocaleString()} (Saving)`} (15 Wks)
+            </span>
+            <span className="text-emerald-900">
+              <span className="uppercase text-[8px] text-gray-600 font-bold">Weekly Saving: </span>
+              ₹{savingPerWeek.toLocaleString()}/wk
+            </span>
+            {stpAmount > 0 && (
+              <span className="text-emerald-900">
+                <span className="uppercase text-[8px] text-gray-600 font-bold">STP: </span>
+                ₹{stpAmount.toLocaleString()}
+              </span>
+            )}
+            <span className="text-emerald-900">
+              <span className="uppercase text-[8px] text-gray-600 font-bold">Weekly Total: </span>
+              ₹{(schedules[0]?.amount ? Number(schedules[0].amount) : 990).toLocaleString()}/wk (EMI ₹{(schedules[0]?.emi_amount ? Number(schedules[0].emi_amount) : 890)} + Saving ₹{savingPerWeek})
+            </span>
+            {totalSaving > 0 && (
+              <span className="text-emerald-900">
+                <span className="uppercase text-[8px] text-gray-600 font-bold">Saved: </span>
+                ₹{totalSaving.toLocaleString()}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <h3 className={`text-sm font-black text-black border-b-2 border-black inline-block uppercase tracking-widest ${titleMargin}`}>Collection Schedule</h3>
@@ -138,19 +190,71 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
       {/* Collection Table */}
       <table className={`w-full border-collapse border-2 border-black ${tableFontSize}`}>
         <thead>
-          <tr className="bg-gray-50">
-            <th className={`border-2 border-black text-center w-10 uppercase ${cellPadding}`}>No</th>
-            <th className={`border-2 border-black text-left w-24 uppercase ${cellPadding}`}>Date</th>
-            <th className={`border-2 border-black text-right w-20 uppercase font-black ${cellPadding}`}>Principal</th>
-            <th className={`border-2 border-black text-right w-20 uppercase font-black ${cellPadding}`}>Interest</th>
-            <th className={`border-2 border-black text-right w-24 uppercase font-black ${cellPadding}`}>Total EMI</th>
-            <th className={`border-2 border-black text-center w-20 uppercase ${cellPadding}`}>Sign</th>
-            <th className={`border-2 border-black text-center uppercase ${cellPadding}`}>Remark</th>
-          </tr>
+          {isSavingPlan ? (
+            <tr className="bg-gray-50">
+              <th className={`border-2 border-black text-center w-8 uppercase ${cellPadding}`}>No</th>
+              <th className={`border-2 border-black text-left w-20 uppercase ${cellPadding}`}>Date</th>
+              <th className={`border-2 border-black text-right w-16 uppercase font-black ${cellPadding}`}>Principal</th>
+              <th className={`border-2 border-black text-right w-14 uppercase font-black ${cellPadding}`}>Interest</th>
+              <th className={`border-2 border-black text-right w-16 uppercase font-black ${cellPadding}`}>EMI</th>
+              <th className={`border-2 border-black text-right w-16 uppercase font-black text-emerald-800 ${cellPadding}`}>Saving</th>
+              <th className={`border-2 border-black text-right w-20 uppercase font-black ${cellPadding}`}>Total Due</th>
+              <th className={`border-2 border-black text-center w-14 uppercase ${cellPadding}`}>Sign</th>
+              <th className={`border-2 border-black text-center uppercase ${cellPadding}`}>Remark</th>
+            </tr>
+          ) : (
+            <tr className="bg-gray-50">
+              <th className={`border-2 border-black text-center w-10 uppercase ${cellPadding}`}>No</th>
+              <th className={`border-2 border-black text-left w-24 uppercase ${cellPadding}`}>Date</th>
+              <th className={`border-2 border-black text-right w-20 uppercase font-black ${cellPadding}`}>Principal</th>
+              <th className={`border-2 border-black text-right w-20 uppercase font-black ${cellPadding}`}>Interest</th>
+              <th className={`border-2 border-black text-right w-24 uppercase font-black ${cellPadding}`}>Total EMI</th>
+              <th className={`border-2 border-black text-center w-20 uppercase ${cellPadding}`}>Sign</th>
+              <th className={`border-2 border-black text-center uppercase ${cellPadding}`}>Remark</th>
+            </tr>
+          )}
         </thead>
         <tbody>
           {rows.map((sch, index) => {
             const isSchedule = sch && sch.scheduled_date;
+
+            if (isSavingPlan) {
+              const totalWeekly = isSchedule && sch.amount ? Number(sch.amount) : 990;
+              const savingAmt = isSchedule && sch.saving_amount !== undefined && sch.saving_amount !== null
+                ? Number(sch.saving_amount)
+                : savingPerWeek;
+              const emiAmt = isSchedule && sch.emi_amount ? Number(sch.emi_amount) : (totalWeekly - savingAmt);
+              const principal = isSchedule ? principalPerWeek : null;
+              const interest = isSchedule && emiAmt ? (emiAmt - principalPerWeek) : null;
+
+              return (
+                <tr key={index} className={rowHeight}>
+                  <td className={`border-2 border-black text-center font-black ${numberFontSize} ${cellPadding}`}>
+                    {isSchedule ? (sch.week_number ?? index + 1) : index + 1}
+                  </td>
+                  <td className={`border-2 border-black font-mono font-bold ${cellPadding}`}>
+                    {isSchedule ? new Date(sch.scheduled_date).toLocaleDateString('en-GB') : ''}
+                  </td>
+                  <td className={`border-2 border-black text-right font-bold text-black ${cellPadding}`}>
+                    {principal ? `₹${principal.toLocaleString()}` : ''}
+                  </td>
+                  <td className={`border-2 border-black text-right font-bold text-black ${cellPadding}`}>
+                    {interest !== null ? (interest > 0 ? `₹${interest.toLocaleString()}` : '—') : ''}
+                  </td>
+                  <td className={`border-2 border-black text-right font-bold text-black ${cellPadding}`}>
+                    {emiAmt ? `₹${emiAmt.toLocaleString()}` : ''}
+                  </td>
+                  <td className={`border-2 border-black text-right font-black text-emerald-700 ${cellPadding}`}>
+                    {savingAmt ? `₹${savingAmt.toLocaleString()}` : ''}
+                  </td>
+                  <td className={`border-2 border-black text-right font-black ${emiFontSize} ${cellPadding}`}>
+                    {totalWeekly ? `₹${totalWeekly.toLocaleString()}` : ''}
+                  </td>
+                  <td className={`border-2 border-black ${cellPadding}`}></td>
+                  <td className={`border-2 border-black ${cellPadding}`}></td>
+                </tr>
+              );
+            }
 
             // Step 1: EMI = directly from database
             const emiAmount = isSchedule && sch.amount ? Number(sch.amount) : null;
@@ -196,6 +300,9 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             <li>இந்த பாஸ்புக்கை எதிர்கால பயன்பாட்டிற்காக பாதுகாப்பாக வைத்திருக்கவும்.</li>
             <li>கடன் வாங்கியவர் மட்டுமே கடன் தொகையை பயன்படுத்த வேண்டும்</li>
             <li>எந்த சூழ்நிலையிலும் யாருக்கும் லஞ்சமோ, அன்பளிப்போ வழங்குதல் கூடாது</li>
+            {isSavingPlan && (
+              <li className="font-bold text-emerald-950">சேமிப்பு தொகை (Savings ₹{savingPerWeek}/wk) கடன் காலம் முடிந்தவுடன் உரிய விதிகளின்படி திரும்ப வழங்கப்படும்.</li>
+            )}
           </ul>
         </div>
 
