@@ -44,7 +44,7 @@ export default function Dashboard() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'loans' },
         (payload) => {
-          if (payload.new && payload.new.status === 'DISBURSED' && payload.new.credited_at) {
+          if (payload.new) {
             const newLoan = payload.new;
             setMembers(prev => {
               const exists = prev.some(m => m.id === newLoan.id);
@@ -69,27 +69,15 @@ export default function Dashboard() {
         (payload) => {
           if (payload.new) {
             const updated = payload.new;
-            if (updated.status === 'DISBURSED' && updated.credited_at) {
-              setMembers(prev => {
-                const exists = prev.some(m => m.id === updated.id);
-                if (exists) {
-                  return prev.map(m => m.id === updated.id ? { ...m, ...updated } : m);
-                }
-                const formatted = {
-                  ...updated,
-                  amount_sanctioned: Number(updated.amount_sanctioned) || 0,
-                  is_saving_plan: Boolean(updated.is_saving_plan) || String(updated.scheme_name || '').toLowerCase().includes('saving'),
-                  saving_per_week: Number(updated.saving_per_week) || 0,
-                  stp_amount: Number(updated.stp_amount) || 0,
-                  total_saving: Number(updated.total_saving) || 0,
-                  _isNew: true
-                };
-                return [formatted, ...prev];
-              });
-            } else {
-              // If status is no longer DISBURSED, remove from list
-              setMembers(prev => prev.filter(m => m.id !== updated.id));
-            }
+            setMembers(prev => prev.map(m => m.id === updated.id ? {
+              ...m,
+              ...updated,
+              amount_sanctioned: Number(updated.amount_sanctioned) || 0,
+              is_saving_plan: Boolean(updated.is_saving_plan) || String(updated.scheme_name || '').toLowerCase().includes('saving'),
+              saving_per_week: Number(updated.saving_per_week) || 0,
+              stp_amount: Number(updated.stp_amount) || 0,
+              total_saving: Number(updated.total_saving) || 0
+            } : m));
           }
         }
       )
@@ -129,13 +117,11 @@ export default function Dashboard() {
     try {
       const centerIds = centerList.map(c => c.id);
       
-      // Fetch ONLY disbursed loans belonging to the staff's centers
+      // Fetch all loans belonging to the staff's centers
       const { data: membersData, error: memError } = await supabase
         .from('loans')
         .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, scheme_name, is_saving_plan, saving_per_week, stp_amount, total_saving, members(member_no)')
         .in('center_id', centerIds)
-        .eq('status', 'DISBURSED')
-        .not('credited_at', 'is', null)
         .order('created_at', { ascending: false });
 
       if (memError) throw memError;
@@ -170,8 +156,8 @@ export default function Dashboard() {
         
       if (error) throw error;
       
-      // Update local state - remove deleted member from list
-      setMembers(prev => prev.filter(m => m.id !== loanId));
+      // Update local state
+      setMembers(prev => prev.map(m => m.id === loanId ? { ...m, status: 'ARCHIVED' } : m));
       alert('Member marked as deleted.');
     } catch (err) {
       console.error('Error archiving member:', err);
@@ -438,8 +424,8 @@ export default function Dashboard() {
   const getRecentMembers = () => {
     const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
     
-    // Sort all disbursed members by creation date descending
-    const activeMembers = members.filter(m => m.status === 'DISBURSED');
+    // Sort all active/non-archived members by creation date descending
+    const activeMembers = members.filter(m => m.status !== 'ARCHIVED');
 
     const sorted = [...activeMembers].sort((a, b) => {
       const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.credited_at ? new Date(a.credited_at).getTime() : 0);
@@ -488,7 +474,7 @@ export default function Dashboard() {
   
   const printedCount = members.filter(m => {
     const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
-    return (m._printed || printedIds.includes(m.id)) && m.status === 'DISBURSED';
+    return (m._printed || printedIds.includes(m.id)) && m.status !== 'ARCHIVED';
   }).length;
   const newCount = members.filter(m => {
     const printedIds = JSON.parse(localStorage.getItem('printed_loans') || '[]');
