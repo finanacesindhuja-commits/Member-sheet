@@ -44,9 +44,6 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
     ? (Number(member.saving_per_week) || (schedules[0]?.saving_amount ? Number(schedules[0].saving_amount) : 100))
     : 0;
 
-  const stpAmount = Number(member.stp_amount) || 0;
-  const totalSaving = Number(member.total_saving) || 0;
-
   // Dynamic scaling classes based on number of weeks to prevent A4 print cutoff
   const isCompact = totalWeeks > 12;
   const isSuperCompact = totalWeeks > 16;
@@ -97,14 +94,7 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-800 uppercase text-[9px]">Loan Amount</span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-black text-base">₹{Number(member.amount_sanctioned).toLocaleString()}</span>
-                {isSavingPlan && (
-                  <span className="text-[8px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-300">
-                    Saving Plan
-                  </span>
-                )}
-              </div>
+              <span className="font-black text-base">₹{Number(member.amount_sanctioned).toLocaleString()}</span>
             </div>
             <div className="border-b border-gray-100 pb-1">
               <span className="font-bold block text-gray-800 uppercase text-[9px]">Center Name</span>
@@ -153,30 +143,6 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             </div>
           </div>
         </div>
-
-        {/* Saving Plan Details Banner if applicable */}
-        {isSavingPlan && (
-          <div className="mt-2 pt-1.5 border-t border-black/20 flex flex-wrap items-center justify-between gap-2 text-[9.5px] font-bold bg-emerald-50/70 -mx-1 px-2 py-1 rounded">
-            <span className="text-emerald-900">
-              <span className="uppercase text-[8px] text-gray-600 font-bold">Scheme: </span>
-              {member.scheme_name || `₹${Number(member.amount_sanctioned || 10000).toLocaleString()} (Saving)`} (15 Wks)
-            </span>
-            <span className="text-emerald-900">
-              <span className="uppercase text-[8px] text-gray-600 font-bold">Weekly Saving: </span>
-              ₹{savingPerWeek.toLocaleString()}/wk
-            </span>
-            {stpAmount > 0 && (
-              <span className="text-emerald-900">
-                <span className="uppercase text-[8px] text-gray-600 font-bold">STP: </span>
-                ₹{stpAmount.toLocaleString()}
-              </span>
-            )}
-            <span className="text-emerald-900">
-              <span className="uppercase text-[8px] text-gray-600 font-bold">Weekly Total: </span>
-              ₹{((schedules[0]?.emi_amount ? Number(schedules[0].emi_amount) : 890) + savingPerWeek).toLocaleString()}/wk (EMI ₹{(schedules[0]?.emi_amount ? Number(schedules[0].emi_amount) : 890)} + Saving ₹{savingPerWeek})
-            </span>
-          </div>
-        )}
       </div>
 
       <h3 className={`text-sm font-black text-black border-b-2 border-black inline-block uppercase tracking-widest ${titleMargin}`}>Collection Schedule</h3>
