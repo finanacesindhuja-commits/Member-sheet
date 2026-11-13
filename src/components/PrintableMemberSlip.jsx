@@ -173,14 +173,8 @@ export default function PrintableMemberSlip({ member, centerName, isPreview = fa
             )}
             <span className="text-emerald-900">
               <span className="uppercase text-[8px] text-gray-600 font-bold">Weekly Total: </span>
-              ₹{(schedules[0]?.amount ? Number(schedules[0].amount) : 990).toLocaleString()}/wk (EMI ₹{(schedules[0]?.emi_amount ? Number(schedules[0].emi_amount) : 890)} + Saving ₹{savingPerWeek})
+              ₹{((schedules[0]?.emi_amount ? Number(schedules[0].emi_amount) : 890) + savingPerWeek).toLocaleString()}/wk (EMI ₹{(schedules[0]?.emi_amount ? Number(schedules[0].emi_amount) : 890)} + Saving ₹{savingPerWeek})
             </span>
-            {totalSaving > 0 && (
-              <span className="text-emerald-900">
-                <span className="uppercase text-[8px] text-gray-600 font-bold">Saved: </span>
-                ₹{totalSaving.toLocaleString()}
-              </span>
-            )}
           </div>
         )}
       </div>
