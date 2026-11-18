@@ -21,8 +21,8 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState('recent'); // 'recent' | 'all'
   const [recentFilter, setRecentFilter] = useState('all'); // 'all' | 'new' | 'printed'
   
-  const staffId = sessionStorage.getItem('staffId');
-  const staffName = sessionStorage.getItem('staffName');
+  const staffId = sessionStorage.getItem('staffId') || localStorage.getItem('staffId');
+  const staffName = sessionStorage.getItem('staffName') || localStorage.getItem('staffName');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export default function Dashboard() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'loans' },
         (payload) => {
-          if (payload.new) {
+          if (payload.new && payload.new.credited_at && payload.new.status !== 'ARCHIVED') {
             const newLoan = payload.new;
             setMembers(prev => {
               const exists = prev.some(m => m.id === newLoan.id);
@@ -69,15 +69,34 @@ export default function Dashboard() {
         (payload) => {
           if (payload.new) {
             const updated = payload.new;
-            setMembers(prev => prev.map(m => m.id === updated.id ? {
-              ...m,
-              ...updated,
-              amount_sanctioned: Number(updated.amount_sanctioned) || 0,
-              is_saving_plan: Boolean(updated.is_saving_plan) || String(updated.scheme_name || '').toLowerCase().includes('saving'),
-              saving_per_week: Number(updated.saving_per_week) || 0,
-              stp_amount: Number(updated.stp_amount) || 0,
-              total_saving: Number(updated.total_saving) || 0
-            } : m));
+            if (updated.credited_at && updated.status !== 'ARCHIVED') {
+              setMembers(prev => {
+                const exists = prev.some(m => m.id === updated.id);
+                if (exists) {
+                  return prev.map(m => m.id === updated.id ? {
+                    ...m,
+                    ...updated,
+                    amount_sanctioned: Number(updated.amount_sanctioned) || 0,
+                    is_saving_plan: Boolean(updated.is_saving_plan) || String(updated.scheme_name || '').toLowerCase().includes('saving'),
+                    saving_per_week: Number(updated.saving_per_week) || 0,
+                    stp_amount: Number(updated.stp_amount) || 0,
+                    total_saving: Number(updated.total_saving) || 0
+                  } : m);
+                }
+                const formatted = {
+                  ...updated,
+                  amount_sanctioned: Number(updated.amount_sanctioned) || 0,
+                  is_saving_plan: Boolean(updated.is_saving_plan) || String(updated.scheme_name || '').toLowerCase().includes('saving'),
+                  saving_per_week: Number(updated.saving_per_week) || 0,
+                  stp_amount: Number(updated.stp_amount) || 0,
+                  total_saving: Number(updated.total_saving) || 0,
+                  _isNew: true
+                };
+                return [formatted, ...prev];
+              });
+            } else {
+              setMembers(prev => prev.filter(m => m.id !== updated.id));
+            }
           }
         }
       )
@@ -117,11 +136,13 @@ export default function Dashboard() {
     try {
       const centerIds = centerList.map(c => c.id);
       
-      // Fetch all loans belonging to the staff's centers
+      // Fetch ONLY disbursed loans (credited_at is not null and not archived)
       const { data: membersData, error: memError } = await supabase
         .from('loans')
         .select('member_name, id, member_id, amount_sanctioned, credited_at, created_at, member_photo_url, mobile_no, nominee_mobile, center_id, status, scheme_name, is_saving_plan, saving_per_week, stp_amount, total_saving, members(member_no)')
         .in('center_id', centerIds)
+        .not('credited_at', 'is', null)
+        .neq('status', 'ARCHIVED')
         .order('created_at', { ascending: false });
 
       if (memError) throw memError;
@@ -213,6 +234,8 @@ export default function Dashboard() {
   const handleLogout = () => {
     sessionStorage.removeItem('staffId');
     sessionStorage.removeItem('staffName');
+    localStorage.removeItem('staffId');
+    localStorage.removeItem('staffName');
     navigate('/login');
   };
 
@@ -695,8 +718,8 @@ export default function Dashboard() {
                       const centerRecent = recentMembers.filter(m => m.center_id === center.id);
                       const isNewCenter = isCenterRecentlyCreated(center, idx);
                       
-                      // If it has no recent members AND it's not a newly created center, skip it in Recent view
-                      if (centerRecent.length === 0 && !isNewCenter) return null;
+                      // If it has no recent members, skip it in Recent view
+                      if (centerRecent.length === 0) return null;
 
                       return (
                         <div 

@@ -10,9 +10,11 @@ const AutoLogoutHandler = () => {
   useEffect(() => {
     let timeoutId;
     const logout = () => {
-      if (sessionStorage.getItem('staffId')) {
+      if (sessionStorage.getItem('staffId') || localStorage.getItem('staffId')) {
         sessionStorage.removeItem('staffId');
         sessionStorage.removeItem('staffName');
+        localStorage.removeItem('staffId');
+        localStorage.removeItem('staffName');
         navigate('/login');
       }
     };
@@ -38,7 +40,7 @@ const AutoLogoutHandler = () => {
 
 function App() {
   const PrivateRoute = ({ children }) => {
-    const staffId = sessionStorage.getItem('staffId');
+    const staffId = sessionStorage.getItem('staffId') || localStorage.getItem('staffId');
     return staffId ? children : <Navigate to="/login" />;
   };
 

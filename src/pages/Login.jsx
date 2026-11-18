@@ -15,22 +15,45 @@ export default function Login() {
     setError('');
     
     try {
-      const { data: staff, error: fetchError } = await supabase
+      const cleanStaffId = (staffId || '').trim();
+      const cleanPassword = (password || '').trim();
+
+      if (!cleanStaffId || !cleanPassword) {
+        setError('Please enter both Staff ID and Password!');
+        setLoading(false);
+        return;
+      }
+
+      const { data: staffList, error: fetchError } = await supabase
         .from('staff')
         .select('*')
-        .ilike('staff_id', staffId)
-        .eq('password', password)
-        .single();
+        .ilike('staff_id', cleanStaffId);
 
-      if (fetchError || !staff) {
-        setError('Invalid Staff ID or Password!');
-      } else {
-        sessionStorage.setItem('staffId', staff.staff_id);
-        sessionStorage.setItem('staffName', staff.name);
-        navigate('/dashboard');
+      if (fetchError) {
+        console.error('Fetch error:', fetchError);
+        setError('Connection error! Please try again.');
+        return;
       }
+
+      if (!staffList || staffList.length === 0) {
+        setError('Staff ID not found!');
+        return;
+      }
+
+      const matchedStaff = staffList.find(s => String(s.password || '').trim() === cleanPassword);
+      if (!matchedStaff) {
+        setError('Invalid Password!');
+        return;
+      }
+
+      sessionStorage.setItem('staffId', matchedStaff.staff_id);
+      sessionStorage.setItem('staffName', matchedStaff.name);
+      localStorage.setItem('staffId', matchedStaff.staff_id);
+      localStorage.setItem('staffName', matchedStaff.name);
+      navigate('/dashboard');
     } catch (err) {
-      setError('Connection error');
+      console.error('Login error:', err);
+      setError('Connection error: ' + (err.message || 'Please try again'));
     } finally {
       setLoading(false);
     }
